@@ -63,7 +63,26 @@ You should see it end with:
 This confirms the driver script runs, but does **not** confirm the
 planner itself was built — it's just the Python wrapper.
 
-### 5. Verify with a real test problem
+### 5. Verify with a real test problem - solvable
+
+**domain.pddl**
+
+(define (domain test)
+  (:requirements :strips)
+  (:predicates (at-a) (at-b))
+  (:action move
+    :parameters ()
+    :precondition (at-a)
+    :effect (and (at-b) (not (at-a)))))
+
+**problem.pddl**
+
+(define (problem test-problem)
+  (:domain test)
+  (:init (at-a))
+  (:goal (at-b)))
+
+### 6. Verify with a real test problem - Conflict
 
 Copy our test domain and problem files (in this repo, under `/domains/sanity-check/`)
 into your `fast-downward-24.06.1` folder, or reference them by path:
@@ -107,28 +126,25 @@ something's wrong with the install, not with the problem.
 
 If you want to confirm the planner also works on a solvable case, once you're a fixed version of the above so that agent 2 targets a different cell than `shared`.
 
-### 6. This one should be solvable:
+### 6. Verify with a real test problem - Solving the Conflict
 
-domain.pddl
+**fixed-problem.pddl**
 
-"""
-(define (domain test)
-  (:requirements :strips)
-  (:predicates (at-a) (at-b))
-  (:action move
-    :parameters ()
-    :precondition (at-a)
-    :effect (and (at-b) (not (at-a)))))
-"""
+(define (problem two-agents-fixed)
+  (:domain conflict-test)
+  (:objects
+    a1 a2 - agent
+    start1 start2 shared other - cell)
+  (:init
+    (at a1 start1)
+    (at a2 start2)
+    (free shared)
+    (free other))
+  (:goal (and (at a1 shared) (at a2 other))))
 
-problem.pddl
+Then run it:
 
-"""
-(define (problem test-problem)
-  (:domain test)
-  (:init (at-a))
-  (:goal (at-b)))
-"""
+    ./fast-downward.py domain.pddl fixed-problem.pddl --search "astar(lmcut())"
 
 ### Notes
 
