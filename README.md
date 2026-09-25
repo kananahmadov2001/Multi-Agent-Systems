@@ -107,6 +107,29 @@ something's wrong with the install, not with the problem.
 
 If you want to confirm the planner also works on a solvable case, once you're a fixed version of the above so that agent 2 targets a different cell than `shared`.
 
+### 6. This one should be solvable:
+
+domain.pddl
+
+"""
+(define (domain test)
+  (:requirements :strips)
+  (:predicates (at-a) (at-b))
+  (:action move
+    :parameters ()
+    :precondition (at-a)
+    :effect (and (at-b) (not (at-a)))))
+"""
+
+problem.pddl
+
+"""
+(define (problem test-problem)
+  (:domain test)
+  (:init (at-a))
+  (:goal (at-b)))
+"""
+
 ### Notes
 
 - Don't commit anything from `fast-downward-24.06.1/` to this repo —
