@@ -1,6 +1,6 @@
 # Multi-Agent-Systems
 
-## Setup: Fast Downward
+## Setup: Fast Downward (macOS, build from source)
 
 Fast Downward is an external dependency and is **not** part of this repo.
 Install it locally, as a sibling directory next to this repo (not inside it):
@@ -146,14 +146,78 @@ Then run it:
 
     ./fast-downward.py domain.pddl fixed-problem.pddl --search "astar(lmcut())"
 
+## Setup: Fast Downward (Windows, Docker)
+
+On Windows we run the official Fast Downward Docker image instead of
+building from source. Nothing is compiled, and no `fast-downward-24.06.1/`
+folder is created.
+
+### 1. Install and start Docker Desktop
+
+Install Docker Desktop (WSL 2 backend) if you don't already have it:
+
+    https://www.docker.com/products/docker-desktop/
+
+Start it and wait until the engine is up — the whale icon in the taskbar
+stops animating. Confirm:
+
+    docker --version
+    docker info
+
+If `docker info` fails with `open //./pipe/dockerDesktopLinuxEngine`,
+the engine isn't up yet; give it another minute and retry.
+
+### 2. Pull the image
+
+    docker pull aibasel/downward
+
+If the pull dies mid-download with an EOF error from
+`production.cloudfront.docker.com` (seen on some networks), pull through
+a mirror and retag:
+
+    docker pull docker.1ms.run/aibasel/downward
+    docker tag docker.1ms.run/aibasel/downward:latest aibasel/downward:latest
+
+### 3. Verify with the test problems
+
+The PDDL files are the same ones shown in the macOS sections above and
+live under `domains/sanity-check/` in this repo. Only the command changes.
+Run these from the repo root in PowerShell.
+
+Solvable:
+
+    docker run --rm -v "${PWD}\domains\sanity-check\trivial:/shared" aibasel/downward --build release /shared/domain.pddl /shared/problem.pddl --search "astar(lmcut())"
+
+Expected: `Solution found. Plan length: 1 step(s).`
+
+Conflict — deliberately unsolvable:
+
+    docker run --rm -v "${PWD}\domains\sanity-check\conflict:/shared" aibasel/downward --build release /shared/domain.pddl /shared/problem.pddl --search "astar(lmcut())"
+
+Expected: `Task is provably unsolvable.` The container exits with code
+11 — that is the planner reporting "no plan", not a crash or a broken
+install.
+
+Conflict resolved:
+
+    docker run --rm -v "${PWD}\domains\sanity-check\conflict:/shared" aibasel/downward --build release /shared/domain.pddl /shared/fixed-problem.pddl --search "astar(lmcut())"
+
+Expected: `Solution found. Plan length: 2 step(s).`
+
+The `${PWD}` mount syntax is PowerShell. In cmd.exe, replace `${PWD}`
+with the absolute path, e.g. `c:\CSE5106\Multi-Agent-Systems`.
+
 ### Notes
 
 - Don't commit anything from `fast-downward-24.06.1/` to this repo —
   it's a large external dependency, and the compiled binary is
-  platform-specific.
+  platform-specific. (On Windows this folder doesn't exist; the Docker
+  image replaces it.)
 - Do commit our own `.pddl` files (like the ones above) to this repo,
   under `/domains/` — those are our work, not part of the Fast Downward
   install.
 - Scripts in this repo assume Fast Downward lives at `../fast-downward-24.06.1/`
   relative to the repo root. If your setup differs, adjust paths locally
-  rather than committing a path change.
+  rather than committing a path change. On Windows, invoke the planner
+  through the `aibasel/downward` container with the PDDL folder mounted
+  at `/shared`, as shown in the Windows section above.
