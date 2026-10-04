@@ -133,7 +133,7 @@ def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
 def show(title, result, stats):
     print(f"\n=== {title} ===")
     if result is None:
-        why = "node limit hit" if stats["hit_limit"] else "no solution"
+        why = "search limit hit" if stats["hit_limit"] else "no solution"
         print(f"FAILED ({why})")
     else:
         for a in sorted(result):
