@@ -81,9 +81,11 @@ def find_conflict(paths):
     return None
 
 
-def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000):
+def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
+          planner=plan_single):
     """
     agents: {name: (start, goal)}
+    planner: low-level single-agent planner (plan_single, or the Fast Downward one)
     rule:   function taking [agent, agent] -> same agents in the order to try
             constraining. THIS is the 'fixed rule' (alphabetical by default).
     """
@@ -92,7 +94,7 @@ def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000):
     paths = {}
     for a, (s, g) in agents.items():
         stats["replans"] += 1
-        p = plan_single(grid, s, g, frozenset(), horizon)
+        p = planner(grid, s, g, frozenset(), horizon)
         if p is None:
             return None, stats
         paths[a] = p
@@ -110,7 +112,7 @@ def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000):
             new_cons[agent] = constraints[agent] | {conflict[agent]}
             s, g = agents[agent]
             stats["replans"] += 1
-            new_path = plan_single(grid, s, g, new_cons[agent], horizon)
+            new_path = planner(grid, s, g, new_cons[agent], horizon)
             if new_path is None:           # this agent cannot avoid it: flip
                 stats["backtracks"] += 1
                 continue
