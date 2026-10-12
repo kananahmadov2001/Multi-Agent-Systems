@@ -221,3 +221,5 @@ with the absolute path, e.g. `c:\CSE5106\Multi-Agent-Systems`.
   rather than committing a path change. On Windows, invoke the planner
   through the `aibasel/downward` container with the PDDL folder mounted
   at `/shared`, as shown in the Windows section above.
+
+Using Claude Sonnet 5.5 for initial tests, can see if we want to compare other models if costs permit, otherwise Sonnet 5.5 is a good benchmark
