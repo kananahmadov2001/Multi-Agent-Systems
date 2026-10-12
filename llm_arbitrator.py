@@ -23,6 +23,7 @@ from cbs_baseline import find_conflict, plan_single
 class AnthropicLLM:
     """Real model. Needs `pip install anthropic` and ANTHROPIC_API_KEY set."""
 
+    tokens_in = tokens_out = 0
     total_calls = 0                     # shared by every instance, so the cap covers a whole run
     max_total_calls = int(os.environ.get("ARBITER_MAX_CALLS", "300"))
 
@@ -38,10 +39,14 @@ class AnthropicLLM:
                                "(raise it with: export ARBITER_MAX_CALLS=500)")
         AnthropicLLM.total_calls += 1
         r = self.client.messages.create(
-            model=self.model, max_tokens=300, temperature=0,
+            model=self.model, max_tokens=1500,      # room for the model's own thinking too
             messages=[{"role": "user", "content": prompt}])
-        text = r.content[0].text
-        self.log.append({"prompt": prompt, "response": text})
+        # The reply can start with a thinking block; keep only the text blocks.
+        text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
+        AnthropicLLM.tokens_in += r.usage.input_tokens
+        AnthropicLLM.tokens_out += r.usage.output_tokens
+        self.log.append({"prompt": prompt, "response": text,
+                         "tokens": (r.usage.input_tokens, r.usage.output_tokens)})
         return text
 
 

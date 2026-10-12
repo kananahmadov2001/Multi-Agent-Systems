@@ -38,3 +38,5 @@ if "--live" in sys.argv:
         run(f"{title}, REAL LLM ({llm.model})", g, ag, llm, horizon=h)
         for i, e in enumerate(llm.log):
             print(f"  call {i + 1}: {e['response']}")
+    print(f"\nAPI usage so far: {AnthropicLLM.total_calls} calls, "
+          f"{AnthropicLLM.tokens_in} input tokens, {AnthropicLLM.tokens_out} output tokens")
