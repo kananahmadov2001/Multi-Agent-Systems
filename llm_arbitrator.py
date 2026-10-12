@@ -23,6 +23,9 @@ from cbs_baseline import find_conflict, plan_single
 class AnthropicLLM:
     """Real model. Needs `pip install anthropic` and ANTHROPIC_API_KEY set."""
 
+    total_calls = 0                     # shared by every instance, so the cap covers a whole run
+    max_total_calls = int(os.environ.get("ARBITER_MAX_CALLS", "300"))
+
     def __init__(self, model=None):
         import anthropic
         self.client = anthropic.Anthropic()
@@ -30,6 +33,10 @@ class AnthropicLLM:
         self.log = []
 
     def __call__(self, prompt):
+        if AnthropicLLM.total_calls >= AnthropicLLM.max_total_calls:
+            raise RuntimeError(f"Stopped: reached the cap of {AnthropicLLM.max_total_calls} API calls "
+                               "(raise it with: export ARBITER_MAX_CALLS=500)")
+        AnthropicLLM.total_calls += 1
         r = self.client.messages.create(
             model=self.model, max_tokens=300, temperature=0,
             messages=[{"role": "user", "content": prompt}])
@@ -57,7 +64,7 @@ def _picture(grid, paths):
     return "\n".join("".join(row) for row in grid.rows)
 
 
-def make_prompt(grid, agents, paths, conflict, notes):
+def make_prompt(grid, agents, paths, conflict, notes, extra=None):
     lines = ["Several agents move on a grid, one step per time unit (a step can be a wait).",
              "Each agent planned alone. Two of the plans collide. Pick ONE agent to be",
              "forbidden from the colliding cell at that time. That agent will replan around it.",
@@ -73,6 +80,8 @@ def make_prompt(grid, agents, paths, conflict, notes):
         lines.append(f"  OPTION {a}: forbid {a} from being at {cell} at time {t}")
     if notes:
         lines += ["", "What already happened at this collision:"] + [f"  - {n}" for n in notes]
+    if extra:
+        lines += ["", extra]
     lines += ["", 'Answer with JSON only, like {"constrain": "<agent name>", "reason": "<one sentence>"}']
     return "\n".join(lines)
 
