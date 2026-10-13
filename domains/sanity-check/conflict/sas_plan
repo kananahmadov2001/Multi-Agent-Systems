@@ -1,0 +1,3 @@
+(move a2 start2 other)
+(move a1 start1 shared)
+; cost = 2 (unit cost)
