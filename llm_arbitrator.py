@@ -87,19 +87,20 @@ def make_prompt(grid, agents, paths, conflict, notes, extra=None):
         lines += ["", "What already happened at this collision:"] + [f"  - {n}" for n in notes]
     if extra:
         lines += ["", extra]
-    lines += ["", 'Answer with JSON only, like {"constrain": "<agent name>", "reason": "<one sentence>"}']
+    lines += ["", 'Reply with ONLY this JSON, no other text: {"constrain": "<agent name>", "reason": "<one sentence>"}']
     return "\n".join(lines)
 
 
 def parse_choice(text, options):
-    m = re.search(r"\{.*?\}", text, re.S)
-    if not m:
-        return None
-    try:
-        choice = json.loads(m.group(0)).get("constrain")
-    except (ValueError, AttributeError):
-        return None
-    return choice if choice in options else None
+    """Take the LAST {...} block that has a valid "constrain" (the model may think out loud first)."""
+    for block in reversed(re.findall(r"\{[^{}]*\}", text)):
+        try:
+            choice = json.loads(block).get("constrain")
+        except (ValueError, AttributeError):
+            continue
+        if choice in options:
+            return choice
+    return None
 
 
 # ---------- the arbitrator ----------
