@@ -6,6 +6,7 @@ Compare the three approaches on the same instances.
     python3 bench.py --live --set hard       real model on the whole hard set
 
 Options: --set easy|hard|all (default hard)   --limit N   --repeat R (run each case R times)   --out results.csv
+A run counts as solved only if verify.py's independent replay accepts it.
 'avg steps' = total moves by all agents, averaged over the cases that approach solved.
 Live runs stop by themselves at ARBITER_MAX_CALLS (default 300) API calls.
 """
@@ -14,6 +15,7 @@ from cbs_baseline import Grid, plan_single, solve, find_conflict
 from llm_arbitrator import FakeLLM, AnthropicLLM, solve_llm
 from hybrid import solve_hybrid
 from instances import gadgets, random_hard
+from verify import verify
 
 HORIZON = 20
 PRICE_IN, PRICE_OUT = 2.0, 10.0          # $ per million tokens (Sonnet 5.5 price page, Oct 2026)
@@ -80,10 +82,17 @@ def main():
             for label, fn in approaches:
                 for rep in range(a.repeat):
                     paths, st = fn(grid, agents, None) if label.startswith("1") else fn(grid, agents)
+                    claimed = paths is not None
+                    if claimed:                      # success is decided by the independent check
+                        ok, _why = verify(grid, agents, paths)
+                        if not ok:
+                            paths = None
+                    mismatch = int(claimed and paths is None)
                     steps = sum(len(p) - 1 for p in paths.values()) if paths else 0
                     makespan = max(len(p) - 1 for p in paths.values()) if paths else 0
                     rows.append({"instance": iname, "agents": len(agents), "approach": label, "run": rep + 1,
-                                 "solved": int(paths is not None), "steps": steps, "makespan": makespan,
+                                 "solved": int(paths is not None), "failed_verify": mismatch,
+                                 "steps": steps, "makespan": makespan,
                                  "nodes": st.get("nodes", 0),
                                  "replans": st["replans"], "backtracks": st.get("backtracks", 0),
                                  "llm_calls": st.get("llm_calls", 0), "invalid": st.get("invalid_answers", 0)})
@@ -107,6 +116,9 @@ def main():
         ok = [r for r in rs if r["solved"]]
         avg = f"{sum(r['steps'] for r in ok) / len(ok):.1f}" if ok else "-"
         print(f"{label:<42}{t('solved'):>4}/{len(rs):<2}{t('nodes'):>8}{t('replans'):>9}{t('backtracks'):>9}{t('llm_calls'):>11}{t('invalid'):>9}{avg:>11}")
+    bad = sum(r["failed_verify"] for r in rows)
+    print(f"\nVerification: {bad} run(s) claimed a solution that failed the independent check "
+          f"(should be 0).")
     if a.live:
         cost = (AnthropicLLM.tokens_in * PRICE_IN + AnthropicLLM.tokens_out * PRICE_OUT) / 1e6
         print(f"\nAPI usage: {AnthropicLLM.total_calls} calls, {AnthropicLLM.tokens_in} in / "
