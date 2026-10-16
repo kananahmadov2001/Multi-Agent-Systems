@@ -1,0 +1,13 @@
+instance,agents,approach,run,solved,failed_verify,steps,makespan,nodes,replans,backtracks,llm_calls,invalid,hit_limit,model
+pocket-5-mid,2,1 fixed rule (alphabetical),1,1,0,12,8,6,7,0,0,0,0,claude-sonnet-5-5
+pocket-5-mid,2,1 fixed rule (alphabetical),2,1,0,12,8,6,7,0,0,0,0,claude-sonnet-5-5
+pocket-5-mid,2,1 fixed rule (alphabetical),3,1,0,12,8,6,7,0,0,0,0,claude-sonnet-5-5
+pocket-5-mid,2,1 fixed rule (reversed),1,1,0,12,8,6,7,0,0,0,0,claude-sonnet-5-5
+pocket-5-mid,2,1 fixed rule (reversed),2,1,0,12,8,6,7,0,0,0,0,claude-sonnet-5-5
+pocket-5-mid,2,1 fixed rule (reversed),3,1,0,12,8,6,7,0,0,0,0,claude-sonnet-5-5
+pocket-5-mid,2,2 LLM no tree [real LLM],1,1,0,14,9,0,9,0,7,0,0,claude-sonnet-5-5
+pocket-5-mid,2,2 LLM no tree [real LLM],2,0,0,0,0,0,20,0,20,2,1,claude-sonnet-5-5
+pocket-5-mid,2,2 LLM no tree [real LLM],3,0,0,0,0,0,21,0,20,1,1,claude-sonnet-5-5
+pocket-5-mid,2,3 hybrid tree [real LLM],1,1,0,14,9,8,9,0,7,0,0,claude-sonnet-5-5
+pocket-5-mid,2,3 hybrid tree [real LLM],2,1,0,12,8,6,7,0,5,0,0,claude-sonnet-5-5
+pocket-5-mid,2,3 hybrid tree [real LLM],3,1,0,18,11,12,13,0,11,0,0,claude-sonnet-5-5
