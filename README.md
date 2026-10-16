@@ -1,9 +1,9 @@
 # Multi-Agent-Systems
 
 CSE 5106 final project: centralized conflict resolution for independently planning agents.
-A central agent resolves collisions between agents' plans in three ways: (1) a fixed-rule
-tree search with backtracking, (2) an LLM that picks who to constrain, with no tree, and
-(3) a hybrid: the same tree, with the LLM choosing which agent to constrain first.
+A central agent resolves collisions between agents' plans in three ways, all on the same
+Conflict-Based-Search tree: (1) a fixed best-first search (CBS), (2) an LLM that picks who to
+constrain, with no tree, and (3) the same tree with the LLM choosing which node to expand next.
 
 ## Project code: how to run Approaches 1-3
 
@@ -20,12 +20,13 @@ Never commit a key. Set it only in your terminal (each new terminal needs it aga
 export ANTHROPIC_API_KEY="sk-ant-..."
 export ARBITER_MAX_CALLS=300      # hard stop on API calls per run (about $0.01 per call)
 # optional: export ARBITER_MODEL=claude-haiku-4-5-20251001   (cheaper; don't mix models in one table)
+# optional: export ARBITER_MAX_TOKENS=4000   (default 4000; the first live runs used 1500, which cut some replies off)
 ```
 
 ### Tests (free, no key)
 | Command | What it checks |
 |---|---|
-| `python3 cbs_baseline.py` | Approach 1: fixed-rule tree search with backtracking (4 toy cases) |
+| `python3 cbs_baseline.py` | Approach 1: Conflict-Based Search, depth-first and best-first (toy cases) |
 | `python3 test_fd.py` | Approach 1 with Fast Downward as the low-level planner |
 | `python3 test_llm.py` | Approach 2 with fake LLMs |
 | `python3 test_hybrid.py` | Approach 3 with fake LLMs |
@@ -41,20 +42,20 @@ python3 bench.py --live --limit 3     # first 3 benchmark cases (about $1)
 python3 bench.py --live --start 5 --limit 8 --out batch2.csv --log batch2.jsonl   # next batch, with transcripts
 python3 bench.py --live --only pocket-5-mid --repeat 3 --out var.csv --log var.jsonl   # variance
 ```
-`bench.py` options: `--set easy|hard|all`, `--start N`, `--limit N`, `--only NAME[,NAME]`, `--repeat R`, `--out FILE`, `--log FILE`.
+`bench.py` options: `--set easy|hard|random|sweep|all` (random = held-out unfiltered cases, sweep = 2/3/4 agents), `--start N`, `--limit N`, `--only NAME[,NAME]`, `--repeat R`, `--out FILE`, `--log FILE`, `--dfs` (also run the depth-first ablation).
 Use a different `--out` for each batch. Ctrl+C is safe: finished instances are kept.
 A run counts as solved only if `verify.py` (an independent replay of all plans) accepts it.
 
 ### Which file is which
-- Approach 1 (fixed-rule tree search): `cbs_baseline.py`, `fd_planner.py`, `test_fd.py`
-- Approach 2 (LLM, no tree): `llm_arbitrator.py`, `test_llm.py`
-- Approach 3 (hybrid, LLM orders the branches): `hybrid.py`, `test_hybrid.py`
+- Approach 1 (Conflict-Based Search, best-first; `solve` is the depth-first ablation): `cbs_baseline.py`, `fd_planner.py`, `test_fd.py`
+- Approach 2 (LLM, no tree, sees its own earlier decisions): `llm_arbitrator.py`, `test_llm.py`
+- Approach 3 (LLM-guided CBS: the LLM picks which open node to expand next, so it also decides when to backtrack): `hybrid.py`, `test_hybrid.py`
 - Evaluation: `instances.py`, `verify.py`, `bench.py`, `results_live.csv`
 
 ### Known differences from the proposal
-- Approach 3's LLM only chooses which agent to constrain first; it does not decide whether to backtrack.
-- Approach 1 is depth-first, so its plans are not optimal.
-- Agent selection, decomposition and the colored-box domain are not built.
+- Agent selection, decomposition, agent-written PDDL with a fixed vocabulary, and the capability-overlap / colored-box domains are not built yet (planned for the final paper).
+- The live runs use our own grid planner as the low-level planner; Fast Downward is checked against it (`test_fd.py`) but not yet used in the live runs.
+- Approach 3 stops at the first conflict-free plan it generates, so its plans are not guaranteed cheapest (Approach 1 is optimal).
 
 ---
 

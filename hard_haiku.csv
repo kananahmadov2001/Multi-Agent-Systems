@@ -1,0 +1,76 @@
+instance,agents,approach,run,solved,failed_verify,steps,makespan,nodes,replans,backtracks,llm_calls,invalid,fallbacks,truncated,tokens_in,tokens_out,seconds,hit_limit,model,call_cap
+pocket-3,2,1 CBS best-first,1,1,0,8,5,26,52,6,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+pocket-3,2,2 LLM no tree [real LLM],1,1,0,8,5,0,7,0,5,0,0,0,2080,339,6.33,0,claude-haiku-4-5-20251001,20/50
+pocket-3,2,3 LLM-guided CBS [real LLM],1,1,0,8,5,17,36,3,16,0,0,0,19670,952,17.85,0,claude-haiku-4-5-20251001,20/50
+pocket-5,2,1 CBS best-first,1,1,0,12,7,32,64,2,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+pocket-5,2,2 LLM no tree [real LLM],1,1,0,22,12,0,17,0,15,0,0,0,10098,1318,22.92,0,claude-haiku-4-5-20251001,20/50
+pocket-5,2,3 LLM-guided CBS [real LLM],1,1,0,12,7,25,52,2,24,0,0,0,33326,1451,31.76,0,claude-haiku-4-5-20251001,20/50
+pocket-5-mid,2,1 CBS best-first,1,1,0,12,8,32,64,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+pocket-5-mid,2,2 LLM no tree [real LLM],1,1,0,16,10,0,11,0,9,0,0,0,4863,632,11.4,0,claude-haiku-4-5-20251001,20/50
+pocket-5-mid,2,3 LLM-guided CBS [real LLM],1,1,0,12,8,16,33,0,15,0,0,0,19707,956,18.29,0,claude-haiku-4-5-20251001,20/50
+three-in-corridor,3,1 CBS best-first,1,0,0,0,0,6001,12003,115,0,0,0,0,0,0,0.42,1,claude-haiku-4-5-20251001,20/50
+three-in-corridor,3,2 LLM no tree [real LLM],1,0,0,0,0,0,23,0,20,0,0,0,15798,1477,26.83,1,claude-haiku-4-5-20251001,20/50
+three-in-corridor,3,3 LLM-guided CBS [real LLM],1,0,0,0,0,51,105,0,50,0,0,0,79772,3097,57.74,1,claude-haiku-4-5-20251001,20/50
+plus-crossing-3,3,1 CBS best-first,1,1,0,9,4,16,33,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+plus-crossing-3,3,2 LLM no tree [real LLM],1,1,0,12,4,0,12,0,9,0,0,0,4959,738,13.03,0,claude-haiku-4-5-20251001,20/50
+plus-crossing-3,3,3 LLM-guided CBS [real LLM],1,1,0,9,4,8,18,0,7,0,0,0,8032,458,8.16,0,claude-haiku-4-5-20251001,20/50
+hard1,3,1 CBS best-first,1,1,0,16,8,4,9,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard1,3,2 LLM no tree [real LLM],1,0,0,0,0,0,23,0,20,0,0,0,16710,1546,25.98,1,claude-haiku-4-5-20251001,20/50
+hard1,3,3 LLM-guided CBS [real LLM],1,1,0,16,8,2,6,0,1,0,0,0,788,63,1.12,0,claude-haiku-4-5-20251001,20/50
+hard2,3,1 CBS best-first,1,1,0,8,4,2,5,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard2,3,2 LLM no tree [real LLM],1,1,0,8,4,0,4,0,1,0,0,0,337,53,1.01,0,claude-haiku-4-5-20251001,20/50
+hard2,3,3 LLM-guided CBS [real LLM],1,1,0,8,4,1,4,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard3,3,1 CBS best-first,1,1,0,21,10,111,223,0,0,0,0,0,0,0,0.03,0,claude-haiku-4-5-20251001,20/50
+hard3,3,2 LLM no tree [real LLM],1,0,0,0,0,0,23,0,20,0,0,0,16924,1473,26.53,1,claude-haiku-4-5-20251001,20/50
+hard3,3,3 LLM-guided CBS [real LLM],1,0,0,0,0,50,103,0,50,1,0,0,88464,3064,59.19,1,claude-haiku-4-5-20251001,20/50
+hard4,3,1 CBS best-first,1,1,0,18,7,27,55,0,0,0,0,0,0,0,0.01,0,claude-haiku-4-5-20251001,20/50
+hard4,3,2 LLM no tree [real LLM],1,1,0,23,8,0,15,0,12,0,0,0,8178,878,16.13,0,claude-haiku-4-5-20251001,20/50
+hard4,3,3 LLM-guided CBS [real LLM],1,1,0,18,7,20,43,0,19,0,0,0,30972,1096,20.65,0,claude-haiku-4-5-20251001,20/50
+hard5,3,1 CBS best-first,1,1,0,17,8,15,31,0,0,0,0,0,0,0,0.01,0,claude-haiku-4-5-20251001,20/50
+hard5,3,2 LLM no tree [real LLM],1,1,0,17,10,0,9,0,6,0,0,0,3216,456,7.82,0,claude-haiku-4-5-20251001,20/50
+hard5,3,3 LLM-guided CBS [real LLM],1,1,0,17,8,10,22,0,9,0,0,0,12674,544,10.15,0,claude-haiku-4-5-20251001,20/50
+hard6,3,1 CBS best-first,1,1,0,20,10,5595,11191,0,0,0,0,0,0,0,0.8,0,claude-haiku-4-5-20251001,20/50
+hard6,3,2 LLM no tree [real LLM],1,0,0,0,0,0,23,0,20,0,0,0,15986,1502,26.1,1,claude-haiku-4-5-20251001,20/50
+hard6,3,3 LLM-guided CBS [real LLM],1,0,0,0,0,51,105,0,50,0,0,0,85116,2886,53.78,1,claude-haiku-4-5-20251001,20/50
+hard7,3,1 CBS best-first,1,1,0,16,6,18,37,0,0,0,0,0,0,0,0.01,0,claude-haiku-4-5-20251001,20/50
+hard7,3,2 LLM no tree [real LLM],1,1,0,22,8,0,11,0,8,0,0,0,4668,583,10.44,0,claude-haiku-4-5-20251001,20/50
+hard7,3,3 LLM-guided CBS [real LLM],1,1,0,16,6,8,19,0,7,0,0,0,9070,428,9.4,0,claude-haiku-4-5-20251001,20/50
+hard8,3,1 CBS best-first,1,1,0,17,6,38,77,0,0,0,0,0,0,0,0.02,0,claude-haiku-4-5-20251001,20/50
+hard8,3,2 LLM no tree [real LLM],1,1,0,25,10,0,19,0,16,0,0,0,12066,1243,21.19,0,claude-haiku-4-5-20251001,20/50
+hard8,3,3 LLM-guided CBS [real LLM],1,1,0,17,6,28,59,0,27,0,0,0,44941,1555,29.29,0,claude-haiku-4-5-20251001,20/50
+hard9,3,1 CBS best-first,1,1,0,12,6,7,15,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard9,3,2 LLM no tree [real LLM],1,1,0,14,7,0,6,0,3,0,0,0,1305,199,3.68,0,claude-haiku-4-5-20251001,20/50
+hard9,3,3 LLM-guided CBS [real LLM],1,1,0,12,6,3,9,0,2,0,0,0,1729,108,2.15,0,claude-haiku-4-5-20251001,20/50
+hard10,3,1 CBS best-first,1,1,0,22,8,33,67,0,0,0,0,0,0,0,0.01,0,claude-haiku-4-5-20251001,20/50
+hard10,3,2 LLM no tree [real LLM],1,1,0,27,10,0,13,0,10,0,0,0,6658,761,13.42,0,claude-haiku-4-5-20251001,20/50
+hard10,3,3 LLM-guided CBS [real LLM],1,1,0,22,8,25,52,0,24,0,0,0,41704,1371,25.89,0,claude-haiku-4-5-20251001,20/50
+hard11,3,1 CBS best-first,1,1,0,15,7,2,5,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard11,3,2 LLM no tree [real LLM],1,1,0,15,7,0,4,0,1,0,0,0,384,52,1.23,0,claude-haiku-4-5-20251001,20/50
+hard11,3,3 LLM-guided CBS [real LLM],1,1,0,15,7,1,4,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard12,3,1 CBS best-first,1,1,0,19,8,64,129,0,0,0,0,0,0,0,0.02,0,claude-haiku-4-5-20251001,20/50
+hard12,3,2 LLM no tree [real LLM],1,0,0,0,0,0,23,0,20,0,0,0,16624,1879,30.14,1,claude-haiku-4-5-20251001,20/50
+hard12,3,3 LLM-guided CBS [real LLM],1,1,0,19,8,42,86,0,41,0,0,0,69516,2447,45.52,0,claude-haiku-4-5-20251001,20/50
+hard13,3,1 CBS best-first,1,1,0,15,7,38,77,0,0,0,0,0,0,0,0.01,0,claude-haiku-4-5-20251001,20/50
+hard13,3,2 LLM no tree [real LLM],1,1,0,15,7,0,7,0,4,0,0,0,1850,274,5.18,0,claude-haiku-4-5-20251001,20/50
+hard13,3,3 LLM-guided CBS [real LLM],1,1,0,15,7,8,19,0,7,0,0,0,8724,416,7.5,0,claude-haiku-4-5-20251001,20/50
+hard14,3,1 CBS best-first,1,0,0,0,0,6001,12003,505,0,0,0,0,0,0,0.87,1,claude-haiku-4-5-20251001,20/50
+hard14,3,2 LLM no tree [real LLM],1,0,0,0,0,0,22,0,20,1,0,0,16276,1374,24.63,1,claude-haiku-4-5-20251001,20/50
+hard14,3,3 LLM-guided CBS [real LLM],1,0,0,0,0,50,103,1,50,1,0,0,83488,3111,57.29,1,claude-haiku-4-5-20251001,20/50
+hard15,3,1 CBS best-first,1,1,0,17,9,203,407,1,0,0,0,0,0,0,0.04,0,claude-haiku-4-5-20251001,20/50
+hard15,3,2 LLM no tree [real LLM],1,0,0,0,0,0,23,0,20,0,0,0,16244,1464,25.61,1,claude-haiku-4-5-20251001,20/50
+hard15,3,3 LLM-guided CBS [real LLM],1,0,0,0,0,50,103,0,50,1,0,0,81526,3177,60.12,1,claude-haiku-4-5-20251001,20/50
+hard16,3,1 CBS best-first,1,1,0,16,7,61,123,5,0,0,0,0,0,0,0.01,0,claude-haiku-4-5-20251001,20/50
+hard16,3,2 LLM no tree [real LLM],1,0,0,0,0,0,23,0,20,0,0,0,15641,1438,24.05,1,claude-haiku-4-5-20251001,20/50
+hard16,3,3 LLM-guided CBS [real LLM],1,1,0,16,7,31,64,1,30,0,0,0,47228,1852,35.69,0,claude-haiku-4-5-20251001,20/50
+hard17,3,1 CBS best-first,1,1,0,13,6,7,15,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard17,3,2 LLM no tree [real LLM],1,1,0,15,7,0,7,0,4,0,0,0,1884,293,5.06,0,claude-haiku-4-5-20251001,20/50
+hard17,3,3 LLM-guided CBS [real LLM],1,1,0,13,6,3,9,0,2,0,0,0,1775,122,2.25,0,claude-haiku-4-5-20251001,20/50
+hard18,3,1 CBS best-first,1,1,0,22,8,2081,4163,0,0,0,0,0,0,0,0.36,0,claude-haiku-4-5-20251001,20/50
+hard18,3,2 LLM no tree [real LLM],1,0,0,0,0,0,23,0,20,0,0,0,16404,1586,27.25,1,claude-haiku-4-5-20251001,20/50
+hard18,3,3 LLM-guided CBS [real LLM],1,0,0,0,0,50,103,0,50,2,1,0,83730,3032,56.36,1,claude-haiku-4-5-20251001,20/50
+hard19,3,1 CBS best-first,1,1,0,14,5,4,9,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard19,3,2 LLM no tree [real LLM],1,1,0,17,6,0,11,0,8,0,0,0,4602,488,9.32,0,claude-haiku-4-5-20251001,20/50
+hard19,3,3 LLM-guided CBS [real LLM],1,1,0,14,5,2,6,0,1,0,0,0,764,81,1.32,0,claude-haiku-4-5-20251001,20/50
+hard20,3,1 CBS best-first,1,1,0,11,4,3,7,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50
+hard20,3,2 LLM no tree [real LLM],1,1,0,11,4,0,4,0,1,0,0,0,353,52,1.06,0,claude-haiku-4-5-20251001,20/50
+hard20,3,3 LLM-guided CBS [real LLM],1,1,0,11,4,1,5,0,0,0,0,0,0,0,0.0,0,claude-haiku-4-5-20251001,20/50

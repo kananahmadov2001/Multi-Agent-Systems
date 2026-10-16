@@ -39,13 +39,13 @@ class AnthropicLLM:
                                "(raise it with: export ARBITER_MAX_CALLS=500)")
         AnthropicLLM.total_calls += 1
         r = self.client.messages.create(
-            model=self.model, max_tokens=1500,      # room for the model's own thinking too
+            model=self.model, max_tokens=int(os.environ.get("ARBITER_MAX_TOKENS", "4000")),   # the model thinks first; 1500 cut replies off
             messages=[{"role": "user", "content": prompt}])
         # The reply can start with a thinking block; keep only the text blocks.
         text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
         AnthropicLLM.tokens_in += r.usage.input_tokens
         AnthropicLLM.tokens_out += r.usage.output_tokens
-        self.log.append({"prompt": prompt, "response": text,
+        self.log.append({"prompt": prompt, "response": text, "stop_reason": getattr(r, "stop_reason", None),
                          "tokens": (r.usage.input_tokens, r.usage.output_tokens)})
         return text
 
@@ -58,7 +58,8 @@ class FakeLLM:
 
     def __call__(self, prompt):
         options = re.findall(r"OPTION (\w+):", prompt)
-        text = json.dumps({"constrain": self.chooser(options, prompt), "reason": "fake"})
+        choice = self.chooser(options, prompt)
+        text = json.dumps({"constrain": choice, "expand": choice, "reason": "fake"})
         self.log.append({"prompt": prompt, "response": text})
         return text
 
@@ -91,11 +92,11 @@ def make_prompt(grid, agents, paths, conflict, notes, extra=None):
     return "\n".join(lines)
 
 
-def parse_choice(text, options):
-    """Take the LAST {...} block that has a valid "constrain" (the model may think out loud first)."""
+def parse_choice(text, options, key="constrain"):
+    """Take the LAST {...} block that has a valid answer under `key` (the model may think out loud first)."""
     for block in reversed(re.findall(r"\{[^{}]*\}", text)):
         try:
-            choice = json.loads(block).get("constrain")
+            choice = json.loads(block).get(key)
         except (ValueError, AttributeError):
             continue
         if choice in options:
@@ -110,6 +111,21 @@ def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single):
     stats = {"llm_calls": 0, "replans": 0, "failed_replans": 0,
              "invalid_answers": 0, "hit_limit": False}
     constraints = {a: frozenset() for a in agents}
+    decisions = []                               # what the LLM chose so far: its only memory (no tree)
+
+    def memory():
+        lines = []
+        cons = [f"{a}: " + ", ".join(f"{c} at t={t}" for c, t in sorted(constraints[a], key=lambda x: (x[1], x[0])))
+                for a in sorted(agents) if constraints[a]]
+        if cons:
+            lines += ["Constraints already applied (they stay in force, each agent must avoid all of its own):"]
+            lines += ["  " + x for x in cons]
+        if decisions:
+            lines += ["Your earlier decisions, oldest first (last 12):"] + ["  " + d for d in decisions[-12:]]
+        if lines:
+            lines.append("Use this history so you do not repeat a choice that did not help.")
+        return "\n".join(lines) or None
+
     paths = {}
     for a, (s, g) in agents.items():
         stats["replans"] += 1
@@ -131,7 +147,7 @@ def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single):
                 return None, stats
             stats["llm_calls"] += 1
             text = llm(make_prompt(grid, agents, paths,
-                                   {a: conflict[a] for a in options}, notes))
+                                   {a: conflict[a] for a in options}, notes, extra=memory()))
             agent = parse_choice(text, options)
             if agent is None:
                 stats["invalid_answers"] += 1
@@ -144,9 +160,13 @@ def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single):
             if new_path is None:
                 stats["failed_replans"] += 1
                 failed.add(agent)
+                decisions.append(f"{len(decisions) + 1}. collision at {conflict[agent][0]}, t={conflict[agent][1]}: "
+                                 f"you chose {agent}, but it has no path that avoids it")
                 notes.append(f"{agent} has no path that avoids {conflict[agent][0]} "
                              f"at time {conflict[agent][1]}. Choose the other agent.")
                 continue
             constraints[agent] = cons
             paths[agent] = new_path
             resolved = True
+            decisions.append(f"{len(decisions) + 1}. collision at {conflict[agent][0]}, t={conflict[agent][1]}: "
+                             f"you chose {agent}; it replanned ({len(new_path) - 1} steps)")

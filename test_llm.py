@@ -31,8 +31,8 @@ if not live:      # fake LLMs: free, checks that the loop works
         {"a1": ((0, 0), (0, 2)), "a2": ((0, 2), (0, 0))}, FakeLLM(pick("a1")), horizon=8)
 
     # one example prompt, so you can see exactly what the LLM is shown
-    fake = run("prompt example", cross, cross_agents, FakeLLM(pick("a1")))
-    print("\n----- prompt sent to the LLM -----\n" + fake.log[0]["prompt"])
+    fake = run("prompt example", pocket, pocket_agents, FakeLLM(pick("a1")), horizon=10)
+    print("\n----- a later prompt sent to the LLM (it now sees its own earlier decisions) -----\n" + fake.log[3]["prompt"])
 
 if live:      # real model only (costs a few cents)
     for title, g, ag, h in [("crossing", cross, cross_agents, 30), ("pocket", pocket, pocket_agents, 10)]:

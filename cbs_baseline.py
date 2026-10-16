@@ -1,5 +1,11 @@
 """
-Approach 1: deterministic conflict-resolution search (CBS-style, depth-first).
+Approach 1: deterministic conflict-resolution search (Conflict-Based Search).
+
+Two ways to walk the same constraint tree:
+  solve(...)             depth-first with backtracking (the proposal's strategy table). Returns the
+                         first conflict-free plan it reaches, so plans are not necessarily shortest.
+  solve_best_first(...)  best-first: always expand the open node with the lowest total path cost,
+                         as in Sharon et al. 2015 (the proposal's Related Work). Optimal plans.
 
 High level (this is the part we are testing):
   1. Every agent plans alone.
@@ -130,6 +136,56 @@ def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
     return dfs(root_cons, paths), stats
 
 
+def solve_best_first(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
+                     planner=plan_single):
+    """
+    Conflict-Based Search as in Sharon et al. 2015: a priority queue of tree nodes ordered by the
+    total cost (sum of path lengths). Each expansion picks the first conflict and creates BOTH
+    children (one per agent, each forbidden from the conflict cell at that time) and replans that
+    agent. A child whose agent cannot replan is dropped. The first node popped with no conflict is
+    a solution with minimal total cost (for the given horizon).
+    `rule` only breaks ties between equal-cost nodes (the order the two children are created in).
+    stats: nodes = nodes expanded, backtracks = children dropped because the agent could not replan.
+    """
+    import heapq
+    stats = {"nodes": 0, "replans": 0, "backtracks": 0, "hit_limit": False}
+
+    paths = {}
+    for a, (s, g) in agents.items():
+        stats["replans"] += 1
+        p = planner(grid, s, g, frozenset(), horizon)
+        if p is None:
+            return None, stats
+        paths[a] = p
+
+    cost = lambda ps: sum(len(p) - 1 for p in ps.values())
+    tick = itertools.count()
+    root_cons = {a: frozenset() for a in agents}
+    heap = [(cost(paths), next(tick), root_cons, paths)]
+    while heap:
+        _, _, constraints, paths = heapq.heappop(heap)
+        stats["nodes"] += 1
+        if stats["nodes"] > max_nodes:
+            stats["hit_limit"] = True
+            return None, stats
+        conflict = find_conflict(paths)
+        if conflict is None:
+            return paths, stats
+        for agent in rule(list(conflict)):
+            new_cons = dict(constraints)
+            new_cons[agent] = constraints[agent] | {conflict[agent]}
+            s, g = agents[agent]
+            stats["replans"] += 1
+            new_path = planner(grid, s, g, new_cons[agent], horizon)
+            if new_path is None:
+                stats["backtracks"] += 1
+                continue
+            new_paths = dict(paths)
+            new_paths[agent] = new_path
+            heapq.heappush(heap, (cost(new_paths), next(tick), new_cons, new_paths))
+    return None, stats
+
+
 def show(title, result, stats):
     print(f"\n=== {title} ===")
     if result is None:
@@ -160,3 +216,9 @@ if __name__ == "__main__":
     grid = Grid(["...", "#.#"])
     agents = {"a1": ((0, 0), (0, 2)), "a2": ((0, 2), (0, 0))}
     show("corridor with a pocket (solvable)", *solve(grid, agents, horizon=10))
+
+    # Same cases with best-first CBS (lowest total cost first).
+    show("pocket, best-first CBS", *solve_best_first(grid, agents, horizon=10))
+    grid = Grid(["...", "...", "..."])
+    agents = {"a1": ((0, 1), (2, 1)), "a2": ((1, 0), (1, 2))}
+    show("crossing paths, best-first CBS", *solve_best_first(grid, agents))
