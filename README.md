@@ -1,5 +1,64 @@
 # Multi-Agent-Systems
 
+CSE 5106 final project: centralized conflict resolution for independently planning agents.
+A central agent resolves collisions between agents' plans in three ways: (1) a fixed-rule
+tree search with backtracking, (2) an LLM that picks who to constrain, with no tree, and
+(3) a hybrid: the same tree, with the LLM choosing which agent to constrain first.
+
+## Project code: how to run Approaches 1-3
+
+Needs Python 3.10+. Approach 1 with the Fast Downward planner also needs Fast Downward 24.06.1 unpacked **next to** this repo (`../fast-downward-24.06.1`).
+
+### Python setup
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install anthropic
+```
+Never commit a key. Set it only in your terminal (each new terminal needs it again):
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export ARBITER_MAX_CALLS=300      # hard stop on API calls per run (about $0.01 per call)
+# optional: export ARBITER_MODEL=claude-haiku-4-5-20251001   (cheaper; don't mix models in one table)
+```
+
+### Tests (free, no key)
+| Command | What it checks |
+|---|---|
+| `python3 cbs_baseline.py` | Approach 1: fixed-rule tree search with backtracking (4 toy cases) |
+| `python3 test_fd.py` | Approach 1 with Fast Downward as the low-level planner |
+| `python3 test_llm.py` | Approach 2 with fake LLMs |
+| `python3 test_hybrid.py` | Approach 3 with fake LLMs |
+| `python3 verify.py` | The independent plan checker (1 good plan, 7 bad plans rejected) |
+| `python3 instances.py` | The hard test cases and their backtrack counts |
+| `python3 bench.py` | All three approaches on the 25 hard cases, fake LLMs (checks the harness only) |
+
+### Real model (costs money)
+```bash
+python3 test_llm.py --live            # Approach 2, real model, 2 toy cases
+python3 test_hybrid.py --live         # Approach 3, real model, 2 toy cases
+python3 bench.py --live --limit 3     # first 3 benchmark cases (about $1)
+python3 bench.py --live --start 5 --limit 8 --out batch2.csv --log batch2.jsonl   # next batch, with transcripts
+python3 bench.py --live --only pocket-5-mid --repeat 3 --out var.csv --log var.jsonl   # variance
+```
+`bench.py` options: `--set easy|hard|all`, `--start N`, `--limit N`, `--only NAME[,NAME]`, `--repeat R`, `--out FILE`, `--log FILE`.
+Use a different `--out` for each batch. Ctrl+C is safe: finished instances are kept.
+A run counts as solved only if `verify.py` (an independent replay of all plans) accepts it.
+
+### Which file is which
+- Approach 1 (fixed-rule tree search): `cbs_baseline.py`, `fd_planner.py`, `test_fd.py`
+- Approach 2 (LLM, no tree): `llm_arbitrator.py`, `test_llm.py`
+- Approach 3 (hybrid, LLM orders the branches): `hybrid.py`, `test_hybrid.py`
+- Evaluation: `instances.py`, `verify.py`, `bench.py`, `results_live.csv`
+
+### Known differences from the proposal
+- Approach 3's LLM only chooses which agent to constrain first; it does not decide whether to backtrack.
+- Approach 1 is depth-first, so its plans are not optimal.
+- Agent selection, decomposition and the colored-box domain are not built.
+
+---
+
+
 ## Setup: Fast Downward (macOS, build from source)
 
 Fast Downward is an external dependency and is **not** part of this repo.
