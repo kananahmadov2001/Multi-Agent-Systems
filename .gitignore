@@ -1,2 +1,7 @@
 .venv/
 __pycache__/
+
+# scratch / smoke-test outputs
+haiku_check.*
+offline_new.csv
+results.csv

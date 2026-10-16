@@ -39,18 +39,31 @@ export ARBITER_MAX_CALLS=300      # hard stop on API calls per run (about $0.01 
 python3 test_llm.py --live            # Approach 2, real model, 2 toy cases
 python3 test_hybrid.py --live         # Approach 3, real model, 2 toy cases
 python3 bench.py --live --limit 3     # first 3 benchmark cases (about $1)
-python3 bench.py --live --start 5 --limit 8 --out batch2.csv --log batch2.jsonl   # next batch, with transcripts
-python3 bench.py --live --only pocket-5-mid --repeat 3 --out var.csv --log var.jsonl   # variance
+python3 bench.py --live --start 5 --limit 8 --out results/new/batch.csv --log results/new/batch.jsonl   # next batch, with transcripts
+python3 bench.py --live --only pocket-5-mid --repeat 3 --out results/new/var.csv --log results/new/var.jsonl   # variance
+python3 analyze.py results/haiku/hard_haiku.csv results/haiku/hard_haiku.jsonl   # free: read a finished run
+python3 control.py                    # free: Approach 3's search with no LLM (always the cheapest node)
 ```
 `bench.py` options: `--set easy|hard|random|sweep|all` (random = held-out unfiltered cases, sweep = 2/3/4 agents), `--start N`, `--limit N`, `--only NAME[,NAME]`, `--repeat R`, `--out FILE`, `--log FILE`, `--dfs` (also run the depth-first ablation).
-Use a different `--out` for each batch. Ctrl+C is safe: finished instances are kept.
+Use a different `--out` for each batch (the folder must exist: `mkdir -p results/new`). Ctrl+C is safe: finished instances are kept.
 A run counts as solved only if `verify.py` (an independent replay of all plans) accepts it.
 
 ### Which file is which
 - Approach 1 (Conflict-Based Search, best-first; `solve` is the depth-first ablation): `cbs_baseline.py`, `fd_planner.py`, `test_fd.py`
 - Approach 2 (LLM, no tree, sees its own earlier decisions): `llm_arbitrator.py`, `test_llm.py`
 - Approach 3 (LLM-guided CBS: the LLM picks which open node to expand next, so it also decides when to backtrack): `hybrid.py`, `test_hybrid.py`
-- Evaluation: `instances.py`, `verify.py`, `bench.py`, `results_live.csv`
+- Evaluation: `instances.py`, `verify.py`, `bench.py`, `analyze.py`, `control.py`
+
+### Results folder
+| Folder | What it holds |
+|---|---|
+| `results/haiku/` | Main runs, model `claude-haiku-4-5-20251001`: `hard_haiku` (25 hard cases), `random_haiku` (20 unfiltered cases), `sweep_haiku` (2/3/4 agents), `var_haiku` (10 hard cases x 3 repeats). Caps: 20 calls (Approach 2), 50 calls (Approach 3). |
+| `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap (Haiku). |
+| `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. A larger Sonnet comparison is planned. |
+| `results/control/` | `control.txt`: output of `control.py`, Approach 3's search with no LLM. |
+| `results/first_run_depth_first/` | **First run only, kept for the record.** Made with the earlier depth-first version of Approach 1 and a 1,500-token reply limit that cut some replies off. Do not mix with the tables above. |
+
+Each run has a `.csv` (one row per instance and approach) and a `.jsonl` (every prompt and reply). Do not mix models in one table.
 
 ### Known differences from the proposal
 - Agent selection, decomposition, agent-written PDDL with a fixed vocabulary, and the capability-overlap / colored-box domains are not built yet (planned for the final paper).
