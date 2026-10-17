@@ -1,0 +1,63 @@
+set    instance                CBS-bf   cheapest-policy, cap 50       cap 150
+hard   pocket-3                    26                        19            19
+hard   pocket-5                    32                        23            23
+hard   pocket-5-mid                32                        16            16
+hard   three-in-corridor    6001 FAIL                   51 FAIL      151 FAIL
+hard   plus-crossing-3             16                         8             8
+hard   hard1                        4                         2             2
+hard   hard2                        2                         1             1
+hard   hard3                      111                   51 FAIL           110
+hard   hard4                       27                        23            23
+hard   hard5                       15                         9             9
+hard   hard6                     5595                   51 FAIL      151 FAIL
+hard   hard7                       18                         8             8
+hard   hard8                       38                        32            32
+hard   hard9                        7                         3             3
+hard   hard10                      33                        28            28
+hard   hard11                       2                         1             1
+hard   hard12                      64                        32            32
+hard   hard13                      38                         8             8
+hard   hard14               6001 FAIL                   51 FAIL      151 FAIL
+hard   hard15                     203                   51 FAIL           117
+hard   hard16                      61                        31            31
+hard   hard17                       7                         3             3
+hard   hard18                    2081                   51 FAIL      151 FAIL
+hard   hard19                       4                         2             2
+hard   hard20                       3                         1             1
+random r1                           3                         1             1
+random r2                         422                   51 FAIL      151 FAIL
+random r3                           7                         4             4
+random r4                           7                         4             4
+random r5                           7                         3             3
+random r6                          29                        28            28
+random r7                           4                         2             2
+random r8                           2                         1             1
+random r9                           4                         2             2
+random r10                          4                         2             2
+random r11                          3                         1             1
+random r12                          2                         1             1
+random r13                        184                   51 FAIL           103
+random r14                         18                        17            17
+random r15                          7                         3             3
+random r16                          3                         2             2
+random r17                          2                         1             1
+random r18                          8                         4             4
+random r19                          2                         1             1
+random r20                         28                        11            11
+sweep  a2-1                         9                         3             3
+sweep  a2-2                        84                   51 FAIL            58
+sweep  a2-3                         3                         1             1
+sweep  a2-4                         2                         1             1
+sweep  a2-5                         2                         1             1
+sweep  a3-1                         8                         6             6
+sweep  a3-2                         2                         1             1
+sweep  a3-3                         2                         1             1
+sweep  a3-4                         8                         4             4
+sweep  a3-5                        12                         6             6
+sweep  a4-1                         3                         2             2
+sweep  a4-2                         8                         4             4
+sweep  a4-3                        16                         5             5
+sweep  a4-4                         2                         1             1
+sweep  a4-5                        23                        20            20
+
+solved: {('hard', 50): 19, ('hard', 150): 21, ('hard', 'cbs'): 23, ('random', 50): 18, ('random', 150): 19, ('random', 'cbs'): 20, ('sweep', 50): 14, ('sweep', 150): 15, ('sweep', 'cbs'): 15}
