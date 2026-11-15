@@ -23,15 +23,89 @@ build. The first argument of make_fd_planner is passed positionally for that rea
 Each CBS expansion costs roughly one Fast Downward call (~1 s through Docker), so
 this is far slower than the grid run: start with --only or --limit. A run counts
 as solved only if verify.py accepts it, the same rule as bench.py.
+--fd-mode exec reuses one long-lived container instead of starting one per call,
+which removes about 0.5 s of container startup from each call.
 """
-import argparse, json, os, time
+import argparse, json, os, subprocess, time
 from cbs_baseline import solve, solve_best_first
 from llm_arbitrator import FakeLLM, AnthropicLLM, solve_llm
 from hybrid import solve_hybrid, solve_hybrid_dfs
 from instances import gadgets, random_hard, random_plain, sweep
 from verify import verify
+import fd_planner
 from fd_planner import make_fd_planner
 from bench import HORIZON, easy_instances, longest_path, save_csv, price_for
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+FD_IMAGE = "aibasel/downward"
+
+
+def _docker(*args):
+    return subprocess.run(["docker", *args], capture_output=True, text=True)
+
+
+def ensure_fd_container(name, mount_source):
+    """Reuse a long-lived container with mount_source visible at /shared."""
+    probe = _docker("inspect", "-f", "{{.State.Running}}", name)
+    if probe.returncode == 0:
+        if probe.stdout.strip() != "true":
+            _docker("start", name)
+        return
+    made = _docker("run", "-dit", "--name", name, "--entrypoint", "tail",
+                   "-v", f"{mount_source}:/shared", FD_IMAGE, "-f", "/dev/null")
+    if made.returncode != 0:
+        raise RuntimeError(f"Could not start the {name} container:\n{made.stderr[-800:]}")
+
+
+def make_fd_planner_exec(container, host_dir, container_dir, search):
+    """Fast Downward through a container that is started once and reused.
+
+    fd_planner.make_fd_planner starts a container for every call; measured against
+    `docker exec` that costs about 0.5 s of the ~1.2 s call, so this is the same
+    encoding and the same results for less time. The plan file is deleted before
+    each call: a container that is not recreated would otherwise leave the previous
+    answer on disk and a run that finds no plan would read it back.
+    """
+    os.makedirs(host_dir, exist_ok=True)
+    cache = {}
+    names = ("d.pddl", "p.pddl", "plan", "o.sas")
+    host = {n: os.path.join(host_dir, n) for n in names}
+    there = {n: f"{container_dir}/{n}" for n in names}
+
+    def plan(grid, start, goal, constraints, horizon):
+        if (start, 0) in constraints:
+            return None
+        key = (start, goal, frozenset(constraints), horizon)
+        if key in cache:
+            return cache[key]
+        plan.calls += 1
+        problem = fd_planner.make_problem(grid, start, goal, constraints, horizon)
+        path = None
+        if problem is not None:
+            open(host["d.pddl"], "w").write(fd_planner.DOMAIN)
+            open(host["p.pddl"], "w").write(problem)
+            for stale in (host["plan"], host["o.sas"]):
+                if os.path.exists(stale):
+                    os.remove(stale)
+            res = _docker("exec", container,
+                          "/workspace/downward/fast-downward.py", "--build", "release",
+                          "--plan-file", there["plan"], "--sas-file", there["o.sas"],
+                          there["d.pddl"], there["p.pddl"], "--search", search)
+            if res.returncode == 0 and os.path.exists(host["plan"]):
+                path = [start]
+                for line in open(host["plan"]):
+                    if line.startswith("(move"):
+                        to = line.split()[2].rstrip(")")        # c<r>_<k>_<t>
+                        r, k, _ = to[1:].split("_")
+                        path.append((int(r), int(k)))
+            elif res.returncode not in (10, 11, 12):   # 10-12 = no plan exists
+                raise RuntimeError(f"Fast Downward failed ({res.returncode}):\n"
+                                   + res.stdout[-800:] + res.stderr[-800:])
+        cache[key] = path
+        return path
+
+    plan.calls = 0
+    return plan
 
 
 def main():
@@ -56,6 +130,12 @@ def main():
                          "fast-downward.py (a native build). Passed positionally so this script "
                          "works with either version of fd_planner.py.")
     ap.add_argument("--search", default="astar(lmcut())", help="Fast Downward search configuration")
+    ap.add_argument("--fd-mode", choices=["run", "exec"], default="run",
+                    help="run: what fd_planner.make_fd_planner does, one container per call. "
+                         "exec: reuse one long-lived container; about 2x faster per call "
+                         "because container startup is not paid every time")
+    ap.add_argument("--fd-container", default="fdbox", help="--fd-mode exec: container to reuse or create")
+    ap.add_argument("--fd-workdir", default="fd_work", help="--fd-mode exec: scratch dir in this repo")
     a = ap.parse_args()
 
     inst = []
@@ -78,12 +158,19 @@ def main():
     if a.limit:
         inst = inst[:a.limit]
 
-    # A fresh planner per instance. fd_planner caches by
+    # A fresh planner per instance (created inside the loop). fd_planner caches by
     # (start, goal, constraints, horizon) WITHOUT the grid, so one planner shared
     # across two instances with the same start/goal pair would reuse paths computed
     # on the wrong grid. Intra-instance caching is kept: it is what makes a full CBS
     # expansion usually cost about one Fast Downward call rather than one per replan.
-    planner = None
+    if a.fd_mode == "exec":
+        work = os.path.join(HERE, a.fd_workdir)
+        os.makedirs(work, exist_ok=True)
+        ensure_fd_container(a.fd_container, HERE)
+        make_planner = lambda: make_fd_planner_exec(a.fd_container, work,
+                                                   f"/shared/{a.fd_workdir}", a.search)
+    else:
+        make_planner = lambda: make_fd_planner(a.fd, search=a.search)
 
     if a.live:
         model = os.environ.get("ARBITER_MODEL", "claude-sonnet-5-5")
@@ -129,7 +216,7 @@ def main():
     logf = open(a.log, "a") if (a.log and a.live) else None
     try:
         for iname, grid, agents in inst:
-            planner = make_fd_planner(a.fd, search=a.search)
+            planner = make_planner()
             for label, mk, fn in approaches:
                 for rep in range(a.repeat):
                     llm = mk() if mk else None
