@@ -11,20 +11,39 @@ stays on its goal cell), and confirms:
 """
 
 
+def _waypoints(goal):
+    """One goal cell, or the ordered list of cells a compound subgoal needs."""
+    if isinstance(goal, (list, tuple)) and goal and isinstance(goal[0], (list, tuple)):
+        return list(goal)
+    return [goal]
+
+
 def verify(grid, agents, paths):
-    """Returns (ok, problems). `paths` is {agent: [cell at t=0, t=1, ...]}."""
+    """Returns (ok, problems). `paths` is {agent: [cell at t=0, t=1, ...]}.
+
+    A subgoal is one cell or an ordered list of cells: a compound subgoal is
+    served when the path reaches each cell in that order, and the agent then
+    parks on the last one.
+    """
     problems = []
     if paths is None:
         return False, ["no paths"]
     for a, (start, goal) in agents.items():
+        goals = _waypoints(goal)
         p = paths.get(a)
         if not p:
             problems.append(f"{a}: no path")
             continue
         if p[0] != start:
             problems.append(f"{a}: starts at {p[0]}, not {start}")
-        if p[-1] != goal:
-            problems.append(f"{a}: ends at {p[-1]}, not its goal {goal}")
+        served = 0
+        for cell in p:
+            if served < len(goals) and cell == goals[served]:
+                served += 1
+        if served < len(goals):
+            problems.append(f"{a}: reaches only {served} of {len(goals)} subgoals {goals}")
+        elif p[-1] != goals[-1]:
+            problems.append(f"{a}: ends at {p[-1]}, not its goal {goals[-1]}")
         for t in range(1, len(p)):
             (r0, c0), (r1, c1) = p[t - 1], p[t]
             if not grid.free(p[t]):

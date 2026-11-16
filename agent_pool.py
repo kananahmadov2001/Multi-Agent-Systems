@@ -58,19 +58,22 @@ class Agent:
 
 
 class Task:
-    """What the user asked for, as the capability tags it needs."""
+    """What the user asked for, as the capability tags it needs, in task order."""
 
-    def __init__(self, description, requires):
+    def __init__(self, description, requires, order=None):
         self.description = description
         self.requires = frozenset(requires)
-  
+        self.order = tuple(order) if order is not None else tuple(sorted(self.requires))
+        if set(self.order) != self.requires:
+            raise ValueError(f"order {list(self.order)} is not the required set {sorted(self.requires)}")
+
     @classmethod
     def from_text(cls, description, keywords=DEFAULT_KEYWORDS):
         """Read the requirement the way an advert is read, so the demo stays free."""
         return cls(description, advertise(description, keywords))
 
     def __repr__(self):
-        return f"Task({self.description!r}, requires={sorted(self.requires)})"
+        return f"Task({self.description!r}, requires={sorted(self.requires)}, order={list(self.order)})"
 
 
 class AgentPool:

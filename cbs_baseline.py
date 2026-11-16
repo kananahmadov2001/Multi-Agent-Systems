@@ -40,8 +40,21 @@ class Grid:
                 yield n
 
 
+def _is_waypoints(goal):
+    """A goal is one cell (r, k) or an ordered list of cells [c1, c2, ...]."""
+    if isinstance(goal, list):
+        return True
+    return isinstance(goal, tuple) and bool(goal) and isinstance(goal[0], (list, tuple))
+
+
 def plan_single(grid, start, goal, constraints, horizon):
-    """Shortest-time path honoring (cell, time) constraints, or None."""
+    """Shortest-time path honoring (cell, time) constraints, or None.
+
+    `goal` is one cell, or a list of cells to visit in order; the second form is
+    what lets one agent serve two parts of a task (see plan_route).
+    """
+    if _is_waypoints(goal):
+        return plan_route(grid, start, goal, constraints, horizon)
     if (start, 0) in constraints:
         return None
     # The agent must be able to sit on its goal, so it may only finish after
@@ -65,6 +78,50 @@ def plan_single(grid, start, goal, constraints, horizon):
             parent[(n, t + 1)] = (cell, t)
             q.append((n, t + 1))
     return None
+
+
+def plan_route(grid, start, goals, constraints, horizon):
+    """Shortest-time path that serves `goals` in order, ending on the last one.
+
+    The search state is (cell, served, time): `served` is how many waypoints have
+    been reached, and reaching one is instantaneous, which matches the conflict
+    model where a cell is occupied at a time step. After the last waypoint the
+    agent parks there, so it may only finish after that cell is last forbidden,
+    the same rule plan_single uses for a single goal.
+    """
+    goals = tuple(g for i, g in enumerate(goals) if i == 0 or g != goals[i - 1])
+    if not goals:
+        raise ValueError("plan_route needs at least one goal")
+    if (start, 0) in constraints:
+        return None
+    last_block = max((t for (c, t) in constraints if c == goals[-1]), default=-1)
+
+    served = 1 if start == goals[0] else 0
+    q = deque([(start, served, 0)])
+    parent = {(start, served, 0): None}
+    while q:
+        cell, done, t = q.popleft()
+        if done == len(goals) and t > last_block:
+            path, node = [], (cell, done, t)
+            while node is not None:
+                path.append(node[0])
+                node = parent[node]
+            return path[::-1]
+        if t >= horizon:
+            continue
+        for n in grid.neighbors(cell):
+            if (n, t + 1) in constraints:
+                continue
+            nxt = done + 1 if done < len(goals) and n == goals[done] else done
+            key = (n, nxt, t + 1)
+            if key in parent:
+                continue
+            parent[key] = (cell, done, t)
+            q.append(key)
+    return None
+
+
+
 
 
 def pos_at(path, t):
