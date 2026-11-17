@@ -4,7 +4,7 @@ it does not call find_conflict, so a bug there cannot hide a bad plan.
 
 It replays all agents' paths together, one time step at a time (an agent that has finished
 stays on its goal cell), and confirms:
-  1. every agent starts at its start cell and ends on its goal cell
+  1. every agent starts at its start cell, reaches its subgoals in order, and ends on the last one
   2. every step is legal: a wait, or one move up/down/left/right onto a free cell
   3. no two agents are on the same cell at the same time
   4. no two agents swap cells in one step

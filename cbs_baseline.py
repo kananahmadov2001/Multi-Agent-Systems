@@ -101,7 +101,7 @@ def plan_route(grid, start, goals, constraints, horizon):
     parent = {(start, served, 0): None}
     while q:
         cell, done, t = q.popleft()
-        if done == len(goals) and t > last_block:
+        if done == len(goals) and cell == goals[-1] and t > last_block:
             path, node = [], (cell, done, t)
             while node is not None:
                 path.append(node[0])
