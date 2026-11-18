@@ -2,15 +2,19 @@
 
 Same instances, three selection strategies, so the rows answer the question the
 midterm asks for: when the pipeline fails, was it selection or arbitration.
+`--domain colored` swaps in the coloured-box world, where each agent plans on its
+own view and a covering team can still be unable to carry out its own split.
 Deterministic for a fixed --seed. Standard library only, no API calls.
 
     python3 pipeline_bench.py                 # 20 instances, seed 7, all three strategies
     python3 pipeline_bench.py --strategies cheapest --out results/pipeline/x.csv
+    python3 pipeline_bench.py --domain colored
 """
 import argparse
 import csv
 import os
 
+from colored_box import colored_instances, run_colored
 from pipeline import run_pipeline
 from pipeline_instances import capability_overlap
 from selection import POLICIES
@@ -22,10 +26,11 @@ FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "team
 OUTCOMES = ("solved", "selection", "decomposition", "arbitration", "verification")
 
 
-def one(inst, k, strategy, max_teams):
+def one(inst, k, strategy, max_teams, domain="capability"):
     """One instance under one strategy, as a CSV row."""
-    result = run_pipeline(inst.grid, inst.pool, inst.task, k, inst.sites,
-                          strategy=strategy, max_teams=max_teams)
+    run = run_colored if domain == "colored" else run_pipeline
+    result = run(inst.grid, inst.pool, inst.task, k, inst.sites,
+                 strategy=strategy, max_teams=max_teams)
     win = result.winner
     return {
         "instance": inst.name,
@@ -73,7 +78,9 @@ def main():
     ap.add_argument("--walls", type=float, default=0.25)
     ap.add_argument("--scarce", type=float, default=0.2,
                     help="chance that the pool lacks one required tag, so the failure is selection")
-    ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument("--domain", choices=("capability", "colored"), default="capability",
+                    help="colored gives each agent its own view of the grid")
+    ap.add_argument("--out", default=None)
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
 
@@ -82,8 +89,12 @@ def main():
     if unknown:
         raise SystemExit(f"unknown strategy {unknown}; pick from {sorted(POLICIES)}")
 
-    insts = capability_overlap(a.n, a.seed, size=a.size, walls=a.walls,
-                               n_agents=a.agents, n_tags=a.tags, k=a.k, scarce=a.scarce)
+    if a.out is None:
+        name = "pipeline_colored.csv" if a.domain == "colored" else "pipeline_results.csv"
+        a.out = os.path.join(HERE, "results", "pipeline", name)
+    build = colored_instances if a.domain == "colored" else capability_overlap
+    insts = build(a.n, a.seed, size=a.size, walls=a.walls,
+                  n_agents=a.agents, n_tags=a.tags, k=a.k, scarce=a.scarce)
     if not insts:
         raise SystemExit("no feasible instance was generated; lower --walls or raise --agents")
     if len(insts) < a.n:
@@ -92,7 +103,7 @@ def main():
     rows = []
     for inst in insts:
         for strategy in strategies:
-            row = one(inst, a.k, strategy, a.max_teams)
+            row = one(inst, a.k, strategy, a.max_teams, a.domain)
             rows.append(row)
             if not a.quiet:
                 end = "solved" if row["solved"] else row["failure"]
