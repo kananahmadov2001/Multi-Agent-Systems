@@ -10,7 +10,7 @@ from agent_pool import Agent, AgentPool, Task
 from selection import select
 from cbs_baseline import Grid, plan_single, solve_best_first
 from verify import verify
-from decompose import greedy_decompose
+from decomposition import greedy_decompose
 
 HORIZON = 20
 MAX_NODES = 2000
