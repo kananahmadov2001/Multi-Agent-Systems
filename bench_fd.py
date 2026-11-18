@@ -216,9 +216,15 @@ def main():
     logf = open(a.log, "a") if (a.log and a.live) else None
     try:
         for iname, grid, agents in inst:
-            planner = make_planner()
             for label, mk, fn in approaches:
                 for rep in range(a.repeat):
+                    # A fresh planner per run. make_fd_planner caches on
+                    # (start, goal, constraints, horizon) WITHOUT the grid, so a planner must
+                    # never be shared across instances. Sharing it across approaches is safe
+                    # but misleading: whichever approach runs first fills the cache and the
+                    # others report ~0 Fast Downward calls. One per run keeps fd_calls an
+                    # honest per-approach cost.
+                    planner = make_planner()
                     llm = mk() if mk else None
                     fd0 = planner.calls
                     t0 = time.perf_counter()
