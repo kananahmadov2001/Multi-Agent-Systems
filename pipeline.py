@@ -23,7 +23,8 @@ KINDS = ("solved", "selection", "decomposition", "arbitration", "verification")
 class Attempt:
     """One team tried, how it ended, and what it produced."""
 
-    def __init__(self, names, kind, detail, goals=None, paths=None, stats=None):
+    def __init__(self, names, kind, detail, goals=None, paths=None, stats=None,
+                 assignment=None):
         assert kind in KINDS, kind
         self.names = list(names)
         self.kind = kind
@@ -31,6 +32,7 @@ class Attempt:
         self.goals = goals
         self.paths = paths
         self.stats = stats
+        self.assignment = assignment
 
     @property
     def ok(self):
@@ -87,7 +89,8 @@ class PipelineResult:
 
 def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZON,
                  max_nodes=MAX_NODES, max_teams=3, planner=plan_single,
-                 solver=solve_best_first, checker=verify, decomposer=greedy_decompose):
+                 solver=solve_best_first, checker=verify, decomposer=greedy_decompose,
+                 selector=select):
     """Select, decompose, plan, verify; on failure try the next covering team.
 
     `max_teams` bounds the switch edge because each extra team is another full
@@ -96,7 +99,7 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
     """
     if max_teams < 1:
         raise ValueError("max_teams must be at least 1")
-    chosen = select(pool, task, k, strategy)
+    chosen = selector(pool, task, k, strategy)
     candidates = [chosen.team] + list(chosen.alternatives)
     seen, attempts = set(), []
     for team in candidates:
@@ -114,19 +117,24 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
         if goals is None:
             attempts.append(Attempt(names, "decomposition", why))
             continue
+        assignment = {a.name: [t for t in task.order if sites[t] in goals[a.name]]
+                      for a in team}
         members = {a.name: a for a in team}
         mapf = {n: (members[n].start, g) for n, g in goals.items()}
         paths, stats = solver(grid, mapf, horizon=horizon, max_nodes=max_nodes, planner=planner)
         if paths is None:
             why = "hit the node cap" if stats["hit_limit"] else "no conflict-free plan"
-            attempts.append(Attempt(names, "arbitration", why, goals=goals, stats=stats))
+            attempts.append(Attempt(names, "arbitration", why, goals=goals, stats=stats,
+                                    assignment=assignment))
             continue
         ok, problems = checker(grid, mapf, paths)
         if not ok:
             attempts.append(Attempt(names, "verification", problems[0],
-                                    goals=goals, paths=paths, stats=stats))
+                                    goals=goals, paths=paths, stats=stats,
+                                    assignment=assignment))
             continue
-        attempts.append(Attempt(names, "solved", "", goals=goals, paths=paths, stats=stats))
+        attempts.append(Attempt(names, "solved", "", goals=goals, paths=paths, stats=stats,
+                                assignment=assignment))
         break
     return PipelineResult(strategy, attempts)
 
@@ -139,6 +147,8 @@ def describe(result):
         if a.detail:
             line += f": {a.detail}"
         lines.append(line)
+        if a.assignment:
+            lines.append(f"     tags {a.assignment}")
         if a.goals:
             lines.append(f"     goals {a.goals}")
         if a.stats:
