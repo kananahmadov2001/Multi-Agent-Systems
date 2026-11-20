@@ -12,20 +12,83 @@ Deterministic for a fixed --seed. Standard library only, no API calls.
 """
 import argparse
 import csv
+import json
 import os
+import re
 
 from colored_box import colored_instances, run_colored
+from decompose import llm_decompose
 from hybrid import solve_hybrid
 from llm_arbitrator import AnthropicLLM, FakeLLM, solve_llm
+from llm_select import propose_team
 from pipeline import run_pipeline
 from pipeline_instances import capability_overlap
-from selection import POLICIES
+from selection import POLICIES, Selection
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
 FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "teams_tried",
           "team", "team_cost", "steps", "nodes", "fd_calls", "llm_calls", "arbiter")
 OUTCOMES = ("solved", "selection", "decomposition", "arbitration", "verification")
+
+
+class Oracle:
+    """Scripted replies for --selector llm and --decomposer llm.
+
+    Selection is told by "Choose a team", decomposition by every other prompt. The
+    answers come from the instance's true capabilities, so a run with this LLM checks
+    the wiring and says nothing about how well a model chooses.
+    """
+
+    def __init__(self, inst, k):
+        self.inst, self.k, self.i, self.team = inst, k, 0, []
+        self.picks = [[a.name for a in t] for t in inst.pool.teams(inst.task, k, 20)
+                      if not inst.pool.missing(t, inst.task)]
+
+    def __call__(self, prompt):
+        if "Choose a team" in prompt:
+            self.team = self.picks[self.i] if self.i < len(self.picks) else self.team
+            self.i += 1
+            return json.dumps({"team": self.team, "reason": "scripted oracle"})
+        by_name = {a.name: a for a in self.inst.pool}
+        # The pipeline may fall back to another covering team, so answer for the team
+        # the prompt names rather than for the one this object picked last.
+        here = [n for n in re.findall(r"^  (\w+): starts at", prompt, re.M) if n in by_name]
+        routes, left = {}, list(self.inst.task.order)
+        for name in here or self.team:
+            mine = [p for p in left if p in by_name[name].capabilities]
+            if mine:
+                routes[name] = mine
+                left = [p for p in left if p not in mine]
+        if left:
+            return json.dumps({"feasible": False, "missing": left, "reason": "scripted oracle"})
+        return json.dumps({"feasible": True, "routes": routes, "reason": "scripted oracle"})
+
+
+def llm_selector(llm, stats):
+    """Adapt propose_team to run_pipeline's selector hook.
+
+    The model picks the first team; the remaining covering teams stay as fallbacks, so
+    the switch edge is unchanged. A failed pick becomes an empty team, which
+    run_pipeline records as a selection failure.
+    """
+
+    def pick(pool, task, k, strategy):
+        team, _ = propose_team(pool, task, k, llm, stats=stats)
+        names = [a.name for a in team] if team else []
+        chosen = [a for a in pool if a.name in names]
+        alts = [[a for a in t] for t in pool.teams(task, k, 5)
+                if sorted(a.name for a in t) != sorted(names)]
+        return Selection("llm", chosen, round(sum(a.cost for a in chosen), 1),
+                         pool.missing(chosen, task), alts)
+
+    return pick
+
+
+def llm_decomposer(llm, grid, stats):
+    """Bind the model and the grid to llm_decompose(task, team, sites)."""
+    return lambda task, team, sites: llm_decompose(task, team, sites, llm,
+                                                   grid=grid, stats=stats)
 
 
 def make_solver(arbiter, llm, calls):
@@ -45,7 +108,8 @@ def make_solver(arbiter, llm, calls):
 
 
 def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
-        arbiter="cbs", make_llm=None, calls=50):
+        arbiter="cbs", make_llm=None, calls=50,
+        selector="tag", decomposer="greedy", live=False):
     """One instance under one strategy, as a CSV row.
 
     A fresh Fast Downward planner per row, never one shared across rows:
@@ -55,7 +119,13 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
     real cost, which is the mistake bench_fd made across approaches.
     """
     run = run_colored if domain == "colored" else run_pipeline
-    extra, planner = {}, None
+    extra, planner, stats = {}, None, {}
+    if selector == "llm" or decomposer == "llm":
+        llm = AnthropicLLM() if live else Oracle(inst, k)
+        if selector == "llm":
+            extra["selector"] = llm_selector(llm, stats)
+        if decomposer == "llm":
+            extra["decomposer"] = llm_decomposer(llm, inst.grid, stats)
     if fd:
         from fd_planner import make_fd_planner
         planner = make_fd_planner(fd, search) if search else make_fd_planner(fd)
@@ -66,7 +136,8 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
                  strategy=strategy, max_teams=max_teams, **extra)
     win = result.winner
     # Every team tried costs calls, not just the one that worked.
-    spent = sum((a.stats or {}).get("llm_calls", 0) for a in result.attempts)
+    spent = (sum((a.stats or {}).get("llm_calls", 0) for a in result.attempts)
+             + stats.get("llm_calls", 0))
     return {
         "instance": inst.name,
         "sealed": ";".join(sorted(inst.sealed)) or "-",
@@ -81,7 +152,8 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         # Approach 2 has no tree, so it reports no node count.
         "nodes": win.stats.get("nodes", "") if win else "",
         "fd_calls": planner.calls if planner else "",
-        "llm_calls": spent if arbiter != "cbs" else "",
+        "llm_calls": (spent if (arbiter != "cbs" or selector == "llm" or decomposer == "llm")
+                      else ""),
         "arbiter": arbiter,
     }
 
@@ -134,12 +206,23 @@ def main():
                          "which costs nothing and checks the wiring first")
     ap.add_argument("--calls", type=int, default=50,
                     help="per-instance call cap for the LLM arbiter")
+    ap.add_argument("--selector", choices=("tag", "llm"), default="tag",
+                    help="tag: the free capability policies; llm: the model reads the adverts "
+                         "and picks the team")
+    ap.add_argument("--decomposer", choices=("greedy", "llm"), default="greedy",
+                    help="greedy: the free reference split; llm: the model, as the central "
+                         "agent, splits the task over the selected team")
     ap.add_argument("--out", default=None)
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
 
     strategies = [s.strip() for s in a.strategies.split(",") if s.strip()]
-    unknown = [s for s in strategies if s not in POLICIES]
+    if a.selector == "llm" or a.decomposer == "llm":
+        if a.domain == "colored":
+            raise SystemExit("--selector/--decomposer llm need the hooks run_colored does "
+                             "not have yet")
+        strategies = ["llm"]
+    unknown = [s for s in strategies if s not in POLICIES and s != "llm"]
     if unknown:
         raise SystemExit(f"unknown strategy {unknown}; pick from {sorted(POLICIES)}")
     if a.fd and a.domain == "colored":
@@ -147,9 +230,10 @@ def main():
                          "it rebuilds the pipeline loop instead of calling run_pipeline")
     if a.arbiter != "cbs" and a.domain == "colored":
         raise SystemExit("--arbiter needs the same hook run_colored does not have yet")
-    if a.live and a.arbiter == "cbs":
-        raise SystemExit("--live has nothing to do with arbiter cbs, which makes no calls; "
-                         "pass --arbiter hybrid or --arbiter llm")
+    if (a.live and a.arbiter == "cbs" and a.selector == "tag"
+            and a.decomposer == "greedy"):
+        raise SystemExit("--live has nothing to do here: nothing in this run calls a model; "
+                         "pass --arbiter hybrid/llm, or --selector llm / --decomposer llm")
 
     model = os.environ.get("ARBITER_MODEL", "claude-sonnet-5-5") if a.live else "fake"
     make_llm = ((lambda: AnthropicLLM()) if a.live
@@ -157,6 +241,9 @@ def main():
     if a.arbiter != "cbs":
         print(f"arbiter {a.arbiter}, model {model}, cap {a.calls} calls per instance"
               + ("" if a.live else "  (no API calls)"))
+    if a.selector == "llm" or a.decomposer == "llm":
+        print(f"llm selector {a.selector}, decomposer {a.decomposer}, model {model}"
+              + ("" if a.live else "  (scripted oracle, no API calls)"))
 
     if a.out is None:
         parts = ["pipeline"]
@@ -166,6 +253,8 @@ def main():
             parts.append("fd")
         if a.arbiter != "cbs":
             parts.append(a.arbiter if a.live else f"{a.arbiter}_fake")
+        if a.selector == "llm" or a.decomposer == "llm":
+            parts.append("llm")
         name = ("_".join(parts) if len(parts) > 1 else "pipeline_results") + ".csv"
         a.out = os.path.join(HERE, "results", "pipeline", name)
     build = colored_instances if a.domain == "colored" else capability_overlap
@@ -180,7 +269,8 @@ def main():
     for inst in insts:
         for strategy in strategies:
             row = one(inst, a.k, strategy, a.max_teams, a.domain, fd=a.fd, search=a.search,
-                      arbiter=a.arbiter, make_llm=make_llm, calls=a.calls)
+                      arbiter=a.arbiter, make_llm=make_llm, calls=a.calls,
+                      selector=a.selector, decomposer=a.decomposer, live=a.live)
             rows.append(row)
             if not a.quiet:
                 end = "solved" if row["solved"] else row["failure"]
