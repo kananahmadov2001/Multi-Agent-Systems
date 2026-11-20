@@ -222,9 +222,6 @@ def main():
     unknown = [s for s in strategies if s not in POLICIES and s != "llm"]
     if unknown:
         raise SystemExit(f"unknown strategy {unknown}; pick from {sorted(POLICIES)}")
-    if a.arbiter != "cbs" and a.domain == "colored":
-        raise SystemExit("run_colored wraps the solver to give each agent its own view, so "
-                         "the hybrid and llm arbiters are not wired for the coloured domain")
     if (a.live and a.arbiter == "cbs" and a.selector == "tag"
             and a.decomposer == "greedy"):
         raise SystemExit("--live has nothing to do here: nothing in this run calls a model; "

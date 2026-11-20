@@ -103,22 +103,19 @@ def colored_instances(n, seed, see=0.8, **kw):
 
 
 def run_colored(cgrid, pool, task, k, sites, strategy="cheapest", max_teams=3,
-                horizon=20, max_nodes=2000, planner=plan_single, **kw):
+                horizon=20, max_nodes=2000, planner=plan_single,
+                solver=solve_best_first, **kw):
     """The pipeline, with each agent planning on its own coloured view.
 
     A split that lands a waypoint outside its owner's palette never reaches the
     solver: `sight_check` records it as a decomposition failure and the next
     covering team is tried, which is the switch edge under a per-agent model.
-    Everything else is run_pipeline; only the solver and the precheck differ.
+    Everything else is run_pipeline; only the solver's planner and the precheck
+    differ, so the hybrid and llm arbiters work here too - they take a planner.
     """
-    if "solver" in kw or "checker" in kw:
-        raise ValueError("run_colored owns the solver: the world model differs per "
-                         "agent, so a plain solver would plan on the wrong grid")
-
     def solve(grid, agents, **opts):
-        opts.pop("planner", None)
-        return solve_best_first(grid, agents, planner=planner_for(cgrid, agents, planner),
-                                **opts)
+        opts["planner"] = planner_for(cgrid, agents, planner)
+        return solver(grid, agents, **opts)
 
     return run_pipeline(cgrid, pool, task, k, sites, strategy=strategy, horizon=horizon,
                         max_nodes=max_nodes, max_teams=max_teams, solver=solve,
