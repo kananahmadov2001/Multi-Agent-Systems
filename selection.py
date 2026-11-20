@@ -84,3 +84,42 @@ def propose_team(pool, task, k, llm, history=(), stats=None, max_calls=3):
         stats["invalid_answers"] += 1
         notes, last = problems, problems[0]
     return None, f"no valid team after {max_calls} call(s): {last}"
+
+
+def main():
+    from agent_pool import Agent, AgentPool, Task
+
+    class Scripted:
+        """Returns its replies in order, repeating the last one."""
+
+        def __init__(self, *texts):
+            self.texts, self.prompts = list(texts), []
+
+        def __call__(self, prompt):
+            self.prompts.append(prompt)
+            return self.texts[min(len(self.prompts), len(self.texts)) - 1]
+
+    class Tried:
+        names, kind, detail = ["a1", "a2"], "arbitration", "no conflict-free plan"
+
+    pool = AgentPool([Agent("a1", "carries crates", cost=1.0),
+                      Agent("a2", "inspects rooms", cost=1.2),
+                      Agent("a3", "carries crates and inspects rooms", cost=2.0)])
+    task = Task.from_text("carry the crate and inspect it")
+
+    team, why = propose_team(pool, task, 2, Scripted('{"team": ["a1", "a2"], "reason": "x"}'))
+    assert [a.name for a in team] == ["a1", "a2"] and why is None
+
+    stats, llm = {}, Scripted('{"team": ["a1"], "reason": "x"}',
+                              '{"team": ["a1", "a3"], "reason": "x"}')
+    team, why = propose_team(pool, task, 2, llm, stats=stats)
+    assert [a.name for a in team] == ["a1", "a3"] and stats["invalid_answers"] == 1
+    assert "exactly 2" in llm.prompts[1] and stats["llm_calls"] == 2
+
+    team, why = propose_team(pool, task, 2, Scripted('{"team": ["a1", "a2"]}'), history=[Tried()])
+    assert team is None and "already tried" in why, (team, why)
+    print("all checks passed")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,66 +1,113 @@
-"""Run the pipeline over capability-overlap instances: one row per strategy.
+"""Run the LLM pipeline over capability-overlap instances: one row per instance.
 
-Same instances, three selection strategies, so the rows answer the question the
-midterm asks for: when the pipeline fails, was it selection or arbitration.
-`--domain colored` swaps in the coloured-box world, where each agent plans on its
-own view and a covering team can still be unable to carry out its own split.
-Deterministic for a fixed --seed. Standard library only, no API calls.
+Every stage is the real code path: selection and decomposition go through the LLM
+interfaces, planning and arbitration are unchanged. What changes is who answers the
+prompts. By default a scripted oracle answers them from the instance's true
+capabilities, which costs nothing and checks the wiring; --live sends the prompts to
+the real model (needs ANTHROPIC_API_KEY, costs money). `--domain colored` swaps in the
+coloured-box world, where each agent plans on its own view.
 
-    python3 pipeline_bench.py                 # 20 instances, seed 7, all three strategies
-    python3 pipeline_bench.py --strategies cheapest --out results/pipeline/x.csv
+Deterministic for a fixed --seed. Standard library only, no API calls unless --live.
+
+    python3 pipeline_bench.py                      # 20 instances, seed 7, scripted, $0
     python3 pipeline_bench.py --domain colored
+    python3 pipeline_bench.py --live --out results/pipeline/pipeline_llm.csv
 """
 import argparse
 import csv
+import json
 import os
 
 from colored_box import colored_instances, run_colored
-from pipeline import run_pipeline
+from pipeline import run_pipeline, make_solver
 from pipeline_instances import capability_overlap
-from selection import POLICIES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
-FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "teams_tried",
-          "team", "team_cost", "steps", "nodes")
+DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_llm.csv")
+FIELDS = ("instance", "sealed", "scarce", "mode", "solved", "failure", "teams_tried",
+          "team", "team_cost", "steps", "nodes", "llm_calls")
 OUTCOMES = ("solved", "selection", "decomposition", "arbitration", "verification")
 
 
-def one(inst, k, strategy, max_teams, domain="capability"):
-    """One instance under one strategy, as a CSV row."""
+class Oracle:
+    """Scripted answers to the selection and decomposition prompts.
+
+    Selection is told by "Choose a team" in the prompt, decomposition by everything else.
+    The teams are the covering ones in cost order, so a repick after a failure lands on
+    the next candidate, which is what the search tree is supposed to do. The replies come
+    from the instance's true capabilities: a run with this LLM checks the pipeline's
+    wiring, and says nothing about how well a model chooses.
+    """
+
+    def __init__(self, inst, k):
+        self.inst, self.k, self.i, self.team = inst, k, 0, None
+        rank = inst.pool.teams(inst.task, k, 5)
+        self.picks = [[a.name for a in t] for t in rank]
+        if not self.picks:                       # nothing covers it; any k names will do
+            names = [a.name for a in sorted(inst.pool, key=lambda a: (a.cost, a.name))]
+            self.picks = [names[i:i + k] for i in range(len(names) - k + 1)]
+
+    def __call__(self, prompt):
+        if "Choose a team" in prompt:
+            return self._pick()
+        return self._split()
+
+    def _pick(self):
+        self.team = self.picks[min(self.i, len(self.picks) - 1)]
+        self.i += 1
+        return json.dumps({"team": self.team, "reason": "scripted oracle"})
+
+    def _split(self):
+        by_name = {a.name: a for a in self.inst.pool}
+        routes, remaining = {}, list(self.inst.task.order)
+        for name in self.team:
+            mine = [p for p in remaining if p in by_name[name].capabilities]
+            if mine:
+                routes[name] = mine
+                remaining = [p for p in remaining if p not in mine]
+        if remaining:
+            return json.dumps({"feasible": False, "missing": remaining,
+                               "reason": "scripted oracle: nobody on the team covers it"})
+        return json.dumps({"feasible": True, "routes": routes, "reason": "scripted oracle"})
+
+
+def one(inst, k, max_teams, domain="capability", live=False):
+    """One instance, as a CSV row."""
     run = run_colored if domain == "colored" else run_pipeline
-    result = run(inst.grid, inst.pool, inst.task, k, inst.sites,
-                 strategy=strategy, max_teams=max_teams)
+    if live:
+        from llm_arbitrator import AnthropicLLM
+        llm, mode = AnthropicLLM(), "live"
+    else:
+        llm, mode = Oracle(inst, k), "scripted"
+    result = run(inst.grid, inst.pool, inst.task, k, inst.sites, llm,
+                 max_teams=max_teams, solver=make_solver(1))
     win = result.winner
     return {
         "instance": inst.name,
         "sealed": ";".join(sorted(inst.sealed)) or "-",
         "scarce": int(inst.scarce),
-        "strategy": strategy,
+        "mode": mode,
         "solved": int(result.ok),
         "failure": "" if result.ok else result.failure,
         "teams_tried": len(result.attempts),
         "team": ";".join(win.names) if win else "",
-        "team_cost": round(sum(a.cost for a in inst.pool if win and a.name in win.names), 1) if win else "",
+        "team_cost": round(sum(a.cost for a in inst.pool if win and a.name in win.names), 1)
+                     if win else "",
         "steps": sum(len(p) - 1 for p in win.paths.values()) if win else "",
         "nodes": win.stats["nodes"] if win else "",
+        "llm_calls": sum(result.llm_calls.values()),
     }
 
 
-def summary(rows, strategies):
-    """Selection strategy x outcome counts, plus how often the switch edge fired."""
-    lines = [f"{'strategy':<11}" + "".join(f"{o:<14}" for o in OUTCOMES)]
-    for s in strategies:
-        mine = [r for r in rows if r["strategy"] == s]
-        cells = [sum(1 for r in mine
-                     if ("solved" if r["solved"] else r["failure"]) == o) for o in OUTCOMES]
-        lines.append(f"{s:<11}" + "".join(f"{n:<14}" for n in cells))
-    lines.append("")
-    for s in strategies:
-        mine = [r for r in rows if r["strategy"] == s]
-        switched = sum(1 for r in mine if r["solved"] and r["teams_tried"] > 1)
-        lines.append(f"  {s}: solved {sum(r['solved'] for r in mine)}/{len(mine)}, "
-                     f"needed a team switch {switched}")
+def summary(rows):
+    """Outcome counts, and how often a team switch was needed."""
+    lines = [f"{'outcome':<14}{'count':>6}"]
+    for o in OUTCOMES:
+        n = sum(1 for r in rows if ("solved" if r["solved"] else r["failure"]) == o)
+        lines.append(f"{o:<14}{n:>6}")
+    switched = sum(1 for r in rows if r["solved"] and r["teams_tried"] > 1)
+    lines.append(f"\nsolved {sum(r['solved'] for r in rows)}/{len(rows)}, "
+                 f"needed a team switch {switched}")
     return "\n".join(lines)
 
 
@@ -70,27 +117,24 @@ def main():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--k", type=int, default=2, help="team size, exactly k agents")
     ap.add_argument("--max-teams", type=int, default=3, help="candidate teams tried per instance")
-    ap.add_argument("--strategies", default="cheapest,greedy,coverage")
     ap.add_argument("--size", type=int, default=5)
     ap.add_argument("--agents", type=int, default=6)
     ap.add_argument("--tags", type=int, default=3,
-                    help="more tags than k, so a team needs a generalist and the policies differ")
+                    help="more tags than k, so a team needs a generalist")
     ap.add_argument("--walls", type=float, default=0.25)
     ap.add_argument("--scarce", type=float, default=0.2,
                     help="chance that the pool lacks one required tag, so the failure is selection")
     ap.add_argument("--domain", choices=("capability", "colored"), default="capability",
                     help="colored gives each agent its own view of the grid")
+    ap.add_argument("--live", action="store_true",
+                    help="send the prompts to the real model. Without it a scripted oracle "
+                         "answers them, which costs nothing")
     ap.add_argument("--out", default=None)
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
 
-    strategies = [s.strip() for s in a.strategies.split(",") if s.strip()]
-    unknown = [s for s in strategies if s not in POLICIES]
-    if unknown:
-        raise SystemExit(f"unknown strategy {unknown}; pick from {sorted(POLICIES)}")
-
     if a.out is None:
-        name = "pipeline_colored.csv" if a.domain == "colored" else "pipeline_results.csv"
+        name = "pipeline_llm_colored.csv" if a.domain == "colored" else "pipeline_llm.csv"
         a.out = os.path.join(HERE, "results", "pipeline", name)
     build = colored_instances if a.domain == "colored" else capability_overlap
     insts = build(a.n, a.seed, size=a.size, walls=a.walls,
@@ -102,16 +146,14 @@ def main():
 
     rows = []
     for inst in insts:
-        for strategy in strategies:
-            row = one(inst, a.k, strategy, a.max_teams, a.domain)
-            rows.append(row)
-            if not a.quiet:
-                end = "solved" if row["solved"] else row["failure"]
-                print(f"{row['instance']:<6} {strategy:<9} {end:<14} teams={row['teams_tried']} "
-                      f"team={row['team'] or '-'} steps={row['steps'] or '-'}")
+        row = one(inst, a.k, a.max_teams, a.domain, a.live)
+        rows.append(row)
+        if not a.quiet:
+            end = "solved" if row["solved"] else row["failure"]
+            print(f"{row['instance']:<6} {end:<14} teams={row['teams_tried']} "
+                  f"team={row['team'] or '-'} steps={row['steps'] or '-'}")
 
-    # A row must be internally consistent: solved rows have a plan, failed ones do not.
-    for r in rows:
+    for r in rows:                             # solved rows have a plan, failed ones do not
         if r["solved"]:
             assert r["team"] and r["steps"] and r["nodes"], r
             assert r["teams_tried"] >= 1, r
@@ -126,8 +168,8 @@ def main():
         writer.writerows(rows)
 
     print()
-    print(summary(rows, strategies))
-    print(f"\n{len(insts)} instances, {len(rows)} rows -> {a.out}")
+    print(summary(rows))
+    print(f"\n{len(insts)} instances -> {a.out}")
 
 
 if __name__ == "__main__":

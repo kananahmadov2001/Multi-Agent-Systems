@@ -25,7 +25,7 @@ team the LLM wrongly rejected is visible in the results.
 """
 from functools import partial
 
-from llm_select import propose_team
+from selection import propose_team
 from decompose import llm_decompose
 from cbs_baseline import plan_single, solve_best_first
 from llm_arbitrator import solve_llm
