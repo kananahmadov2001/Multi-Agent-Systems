@@ -15,6 +15,8 @@ import csv
 import os
 
 from colored_box import colored_instances, run_colored
+from hybrid import solve_hybrid
+from llm_arbitrator import AnthropicLLM, FakeLLM, solve_llm
 from pipeline import run_pipeline
 from pipeline_instances import capability_overlap
 from selection import POLICIES
@@ -22,16 +24,49 @@ from selection import POLICIES
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
 FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "teams_tried",
-          "team", "team_cost", "steps", "nodes")
+          "team", "team_cost", "steps", "nodes", "fd_calls", "llm_calls", "arbiter")
 OUTCOMES = ("solved", "selection", "decomposition", "arbitration", "verification")
 
 
-def one(inst, k, strategy, max_teams, domain="capability"):
-    """One instance under one strategy, as a CSV row."""
+def make_solver(arbiter, llm, calls):
+    """The pipeline's solver for one of the three arbitration approaches.
+
+    run_pipeline calls solver(grid, agents, horizon=, max_nodes=, planner=), so
+    the LLM is bound here rather than passed down. Approach 2 takes no
+    max_nodes, having no tree to bound, so that keyword is dropped for it.
+    """
+    if arbiter == "cbs":
+        return None                                  # run_pipeline's own default
+    if arbiter == "hybrid":
+        return lambda g, ag, **kw: solve_hybrid(g, ag, llm, max_calls=calls, **kw)
+    return lambda g, ag, **kw: solve_llm(
+        g, ag, llm, max_calls=calls,
+        **{k: v for k, v in kw.items() if k != "max_nodes"})
+
+
+def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
+        arbiter="cbs", make_llm=None, calls=50):
+    """One instance under one strategy, as a CSV row.
+
+    A fresh Fast Downward planner per row, never one shared across rows:
+    make_fd_planner caches on (start, goal, constraints, horizon) and not on the
+    grid, and these instances each have their own walls, so a shared planner
+    would answer one instance with another's path. Sharing it also hides the
+    real cost, which is the mistake bench_fd made across approaches.
+    """
     run = run_colored if domain == "colored" else run_pipeline
+    extra, planner = {}, None
+    if fd:
+        from fd_planner import make_fd_planner
+        planner = make_fd_planner(fd, search) if search else make_fd_planner(fd)
+        extra["planner"] = planner
+    if arbiter != "cbs":
+        extra["solver"] = make_solver(arbiter, make_llm(), calls)
     result = run(inst.grid, inst.pool, inst.task, k, inst.sites,
-                 strategy=strategy, max_teams=max_teams)
+                 strategy=strategy, max_teams=max_teams, **extra)
     win = result.winner
+    # Every team tried costs calls, not just the one that worked.
+    spent = sum((a.stats or {}).get("llm_calls", 0) for a in result.attempts)
     return {
         "instance": inst.name,
         "sealed": ";".join(sorted(inst.sealed)) or "-",
@@ -43,7 +78,11 @@ def one(inst, k, strategy, max_teams, domain="capability"):
         "team": ";".join(win.names) if win else "",
         "team_cost": round(sum(a.cost for a in inst.pool if win and a.name in win.names), 1) if win else "",
         "steps": sum(len(p) - 1 for p in win.paths.values()) if win else "",
-        "nodes": win.stats["nodes"] if win else "",
+        # Approach 2 has no tree, so it reports no node count.
+        "nodes": win.stats.get("nodes", "") if win else "",
+        "fd_calls": planner.calls if planner else "",
+        "llm_calls": spent if arbiter != "cbs" else "",
+        "arbiter": arbiter,
     }
 
 
@@ -80,6 +119,21 @@ def main():
                     help="chance that the pool lacks one required tag, so the failure is selection")
     ap.add_argument("--domain", choices=("capability", "colored"), default="capability",
                     help="colored gives each agent its own view of the grid")
+    ap.add_argument("--fd", default=None,
+                    help="plan with Fast Downward instead of the grid planner: a directory "
+                         "containing fast-downward.py. No API calls either way")
+    ap.add_argument("--search", default=None,
+                    help="Fast Downward search configuration, default astar(lmcut()). "
+                         "A satisficing configuration costs optimality, which is the point "
+                         "of passing one")
+    ap.add_argument("--arbiter", choices=("cbs", "hybrid", "llm"), default="cbs",
+                    help="who resolves conflicts: cbs is Approach 1 and free, hybrid is "
+                         "Approach 3 (LLM-guided CBS), llm is Approach 2 (no tree)")
+    ap.add_argument("--live", action="store_true",
+                    help="use the real model. Without it a non-cbs arbiter runs on FakeLLM, "
+                         "which costs nothing and checks the wiring first")
+    ap.add_argument("--calls", type=int, default=50,
+                    help="per-instance call cap for the LLM arbiter")
     ap.add_argument("--out", default=None)
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
@@ -88,9 +142,31 @@ def main():
     unknown = [s for s in strategies if s not in POLICIES]
     if unknown:
         raise SystemExit(f"unknown strategy {unknown}; pick from {sorted(POLICIES)}")
+    if a.fd and a.domain == "colored":
+        raise SystemExit("--fd needs a planner hook that run_colored does not have yet; "
+                         "it rebuilds the pipeline loop instead of calling run_pipeline")
+    if a.arbiter != "cbs" and a.domain == "colored":
+        raise SystemExit("--arbiter needs the same hook run_colored does not have yet")
+    if a.live and a.arbiter == "cbs":
+        raise SystemExit("--live has nothing to do with arbiter cbs, which makes no calls; "
+                         "pass --arbiter hybrid or --arbiter llm")
+
+    model = os.environ.get("ARBITER_MODEL", "claude-sonnet-5-5") if a.live else "fake"
+    make_llm = ((lambda: AnthropicLLM()) if a.live
+                else (lambda: FakeLLM(lambda options, prompt: options[0])))
+    if a.arbiter != "cbs":
+        print(f"arbiter {a.arbiter}, model {model}, cap {a.calls} calls per instance"
+              + ("" if a.live else "  (no API calls)"))
 
     if a.out is None:
-        name = "pipeline_colored.csv" if a.domain == "colored" else "pipeline_results.csv"
+        parts = ["pipeline"]
+        if a.domain == "colored":
+            parts.append("colored")
+        if a.fd:
+            parts.append("fd")
+        if a.arbiter != "cbs":
+            parts.append(a.arbiter if a.live else f"{a.arbiter}_fake")
+        name = ("_".join(parts) if len(parts) > 1 else "pipeline_results") + ".csv"
         a.out = os.path.join(HERE, "results", "pipeline", name)
     build = colored_instances if a.domain == "colored" else capability_overlap
     insts = build(a.n, a.seed, size=a.size, walls=a.walls,
@@ -103,7 +179,8 @@ def main():
     rows = []
     for inst in insts:
         for strategy in strategies:
-            row = one(inst, a.k, strategy, a.max_teams, a.domain)
+            row = one(inst, a.k, strategy, a.max_teams, a.domain, fd=a.fd, search=a.search,
+                      arbiter=a.arbiter, make_llm=make_llm, calls=a.calls)
             rows.append(row)
             if not a.quiet:
                 end = "solved" if row["solved"] else row["failure"]
@@ -113,7 +190,10 @@ def main():
     # A row must be internally consistent: solved rows have a plan, failed ones do not.
     for r in rows:
         if r["solved"]:
-            assert r["team"] and r["steps"] and r["nodes"], r
+            assert r["team"] and r["steps"] != "", r
+            # Not truthiness: Approach 3 stops on generating a conflict-free plan, so
+            # plans that never conflicted expand 0 nodes. Approach 2 keeps no tree at all.
+            assert r["nodes"] != "" or r["arbiter"] == "llm", r
             assert r["teams_tried"] >= 1, r
         else:
             assert r["failure"] in OUTCOMES[1:], r
@@ -127,6 +207,17 @@ def main():
 
     print()
     print(summary(rows, strategies))
+    if a.arbiter != "cbs":
+        spent = sum(int(r["llm_calls"] or 0) for r in rows)
+        print(f"\n  LLM calls: {spent} across {len(rows)} rows"
+              f"  (cap {a.calls} per instance, arbiter {a.arbiter}, model {model})")
+        if a.live:
+            # Haiku 4.5 list price; wrong for another model, so the model is named above.
+            pin, pout = 1.00, 5.00
+            cost = (AnthropicLLM.tokens_in * pin + AnthropicLLM.tokens_out * pout) / 1e6
+            print(f"  API usage: {AnthropicLLM.total_calls} calls, "
+                  f"{AnthropicLLM.tokens_in} in / {AnthropicLLM.tokens_out} out tokens, "
+                  f"about ${cost:.2f}")
     print(f"\n{len(insts)} instances, {len(rows)} rows -> {a.out}")
 
 

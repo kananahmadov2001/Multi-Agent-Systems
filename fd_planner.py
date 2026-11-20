@@ -1,15 +1,34 @@
 """
 Low-level planner backed by Fast Downward. Drop-in replacement for
-cbs_baseline.plan_single.
+cbs_baseline.plan_single, including its ordered-waypoint goals.
 
 Trick for "forbid (cell, t)": PDDL has no clock, so every cell is copied once
 per time step (object c<row>_<col>_<t>). A move goes from (cell, t) to
 (neighbor, t+1). A forbidden (cell, t) simply has no copy, so no move can
 enter it. Waiting is a move from (cell, t) to (cell, t+1).
+
+A goal may be one cell or an ordered list of cells to visit in order, the
+second form being what cbs_baseline.plan_route accepts. The two are encoded
+differently on purpose:
+
+  * One cell: the encoding above, unchanged. This is the only path a
+    single-goal benchmark ever takes, so those results are unaffected.
+  * A route: cells are copied once per (waypoint served, time) instead, giving
+    objects c<row>_<col>_<served>_<time>. Entering route[served] is what moves
+    a plan into the next layer, which mirrors plan_route's (cell, served, time)
+    search and so is complete and optimal over the whole route. Solving a route
+    leg by leg and taking the earliest arrival at each waypoint is neither: it
+    can miss a plan that exists when waiting on a waypoint is forbidden.
+
+Objects grow as free cells x (len(route) + 1) x (horizon + 1), so a route costs
+roughly len(route) + 1 times a single goal. Routes are a small minority of
+goals in our domains, which is what makes that affordable.
 """
 import os
 import subprocess
 import tempfile
+
+from cbs_baseline import _is_waypoints      # one definition of "goal is a route"
 
 DOMAIN = """(define (domain timed-grid)
   (:requirements :strips :typing)
@@ -30,7 +49,33 @@ def _name(cell, t):
     return f"c{cell[0]}_{cell[1]}_{t}"
 
 
+def _rname(cell, served, t):
+    return f"c{cell[0]}_{cell[1]}_{served}_{t}"
+
+
+def as_route(goal):
+    """A goal as a tuple of cells, consecutive repeats dropped.
+
+    Matches plan_route, which serves waypoints in order and so gains nothing
+    from a repeat of the cell it is already standing on.
+    """
+    route = tuple(goal) if _is_waypoints(goal) else (goal,)
+    route = tuple(c for i, c in enumerate(route) if i == 0 or c != route[i - 1])
+    if not route:
+        raise ValueError("a goal must be one cell or a non-empty list of cells")
+    return route
+
+
+def _problem(objects, start, facts):
+    return (f"(define (problem p) (:domain timed-grid)\n"
+            f"  (:objects {' '.join(objects)} - node)\n"
+            f"  (:init (at {start})\n    " + "\n    ".join(facts) +
+            f")\n  (:goal (done)))\n")
+
+
 def make_problem(grid, start, goal, constraints, horizon):
+    """One cell as the goal. The agent parks there, so it may only finish once
+    that cell is forbidden no longer, the rule cbs_baseline.plan_single uses."""
     last_block = max((t for (c, t) in constraints if c == goal), default=-1)
     if last_block >= horizon:
         return None
@@ -52,10 +97,41 @@ def make_problem(grid, start, goal, constraints, horizon):
     goals = [f"(goal-node {_name(goal, t)})"
              for t in range(last_block + 1, horizon + 1)
              if (goal, t) not in constraints]
-    return (f"(define (problem p) (:domain timed-grid)\n"
-            f"  (:objects {' '.join(nodes)} - node)\n"
-            f"  (:init (at {_name(start, 0)})\n    " + "\n    ".join(edges + goals) +
-            f")\n  (:goal (done)))\n")
+    return _problem(nodes, _name(start, 0), edges + goals)
+
+
+def make_route_problem(grid, start, route, constraints, horizon):
+    """An ordered route as the goal, as one problem rather than one per leg.
+
+    A cell copy carries how many waypoints have been served, and entering
+    route[served] advances that count, so a plan cannot serve them out of
+    order or skip one. The agent parks on the last waypoint, which is why the
+    goal copies start after the last time that cell is forbidden.
+    """
+    last = len(route)
+    last_block = max((t for (c, t) in constraints if c == route[-1]), default=-1)
+    if last_block >= horizon:
+        return None
+    cells = [(r, k) for r in range(grid.h) for k in range(grid.w) if grid.free((r, k))]
+    nodes = [_rname(c, s, t)
+             for t in range(horizon + 1) for s in range(last + 1) for c in cells
+             if (c, t) not in constraints]
+    edges = []
+    for t in range(horizon):
+        for s in range(last + 1):
+            for a in cells:
+                if (a, t) in constraints:
+                    continue
+                for n in grid.neighbors(a):
+                    if (n, t + 1) in constraints:
+                        continue
+                    nxt = s + 1 if s < last and n == route[s] else s
+                    edges.append(f"(edge {_rname(a, s, t)} {_rname(n, nxt, t + 1)})")
+    goals = [f"(goal-node {_rname(route[-1], last, t)})"
+             for t in range(last_block + 1, horizon + 1)
+             if (route[-1], t) not in constraints]
+    served = 1 if start == route[0] else 0
+    return _problem(nodes, _rname(start, served, 0), edges + goals)
 
 
 def make_fd_planner(fd_dir, search='astar(lmcut())'):
@@ -66,11 +142,14 @@ def make_fd_planner(fd_dir, search='astar(lmcut())'):
     def plan(grid, start, goal, constraints, horizon):
         if (start, 0) in constraints:
             return None
-        key = (start, goal, frozenset(constraints), horizon)
+        route = as_route(goal)
+        key = (start, route, frozenset(constraints), horizon)
         if key in cache:
             return cache[key]
         plan.calls += 1
-        problem = make_problem(grid, start, goal, constraints, horizon)
+        problem = (make_problem(grid, start, route[0], constraints, horizon)
+                   if len(route) == 1
+                   else make_route_problem(grid, start, route, constraints, horizon))
         path = None
         if problem is not None:
             with tempfile.TemporaryDirectory() as d:
@@ -85,8 +164,8 @@ def make_fd_planner(fd_dir, search='astar(lmcut())'):
                     path = [start]
                     for line in open(out):
                         if line.startswith("(move"):
-                            to = line.split()[2].rstrip(")")        # c<r>_<k>_<t>
-                            r, k, _ = to[1:].split("_")
+                            to = line.split()[2].rstrip(")")   # c<r>_<k>[_<served>]_<t>
+                            r, k = to[1:].split("_")[:2]
                             path.append((int(r), int(k)))
                 elif res.returncode not in (10, 11, 12):   # 10-12 = no plan exists
                     raise RuntimeError(f"Fast Downward failed ({res.returncode}):\n"
