@@ -218,18 +218,13 @@ def main():
 
     strategies = [s.strip() for s in a.strategies.split(",") if s.strip()]
     if a.selector == "llm" or a.decomposer == "llm":
-        if a.domain == "colored":
-            raise SystemExit("--selector/--decomposer llm need the hooks run_colored does "
-                             "not have yet")
         strategies = ["llm"]
     unknown = [s for s in strategies if s not in POLICIES and s != "llm"]
     if unknown:
         raise SystemExit(f"unknown strategy {unknown}; pick from {sorted(POLICIES)}")
-    if a.fd and a.domain == "colored":
-        raise SystemExit("--fd needs a planner hook that run_colored does not have yet; "
-                         "it rebuilds the pipeline loop instead of calling run_pipeline")
     if a.arbiter != "cbs" and a.domain == "colored":
-        raise SystemExit("--arbiter needs the same hook run_colored does not have yet")
+        raise SystemExit("run_colored wraps the solver to give each agent its own view, so "
+                         "the hybrid and llm arbiters are not wired for the coloured domain")
     if (a.live and a.arbiter == "cbs" and a.selector == "tag"
             and a.decomposer == "greedy"):
         raise SystemExit("--live has nothing to do here: nothing in this run calls a model; "

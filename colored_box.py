@@ -11,10 +11,9 @@ import random
 
 from agent_pool import Agent, AgentPool, Task
 from cbs_baseline import Grid, plan_single, solve_best_first
-from pipeline import Attempt, PipelineResult, greedy_decompose
+from pipeline import greedy_decompose, run_pipeline
 from pipeline_instances import PipelineInstance, capability_overlap, reachable
 from selection import select
-from verify import verify
 
 OPEN = "."
 WALL = "#"
@@ -47,20 +46,20 @@ class ColoredGrid(Grid):
         ])
 
 
-def planner_for(cgrid, team):
-    """One low-level planner per agent, looked up by start cell.
+def planner_for(cgrid, mapf, base=plan_single):
+    """One low-level planner per agent view, looked up by start cell.
 
-    solve_best_first only hands the planner a grid, not a name, so the agent's
+    run_pipeline hands the solver a {name: (start, goal)} mapping, so the agent's
     view has to be recovered from its start; these instances keep starts
     distinct, which is also what lets verify treat them as separate actors.
     """
-    starts = [a.start for a in team]
+    starts = [start for start, _ in mapf.values()]
     if len(set(starts)) != len(starts):
         raise ValueError("agents on one team must start on different cells")
-    views = {a.start: cgrid.view(a.name) for a in team}
+    views = {start: cgrid.view(name) for name, (start, _) in mapf.items()}
 
     def planner(_grid, start, goal, constraints, horizon):
-        return plan_single(views[start], start, goal, constraints, horizon)
+        return base(views[start], start, goal, constraints, horizon)
 
     return planner
 
@@ -104,53 +103,38 @@ def colored_instances(n, seed, see=0.8, **kw):
 
 
 def run_colored(cgrid, pool, task, k, sites, strategy="cheapest", max_teams=3,
-                horizon=20, max_nodes=2000):
+                horizon=20, max_nodes=2000, planner=plan_single, **kw):
     """The pipeline, with each agent planning on its own coloured view.
 
     A split that lands a waypoint outside its owner's palette never reaches the
-    solver: it is recorded as a decomposition failure and the next covering team
-    is tried, which is the switch edge under a per-agent world model.
+    solver: `sight_check` records it as a decomposition failure and the next
+    covering team is tried, which is the switch edge under a per-agent model.
+    Everything else is run_pipeline; only the solver and the precheck differ.
     """
-    chosen = select(pool, task, k, strategy)
-    seen, attempts = set(), []
-    for team in [chosen.team] + list(chosen.alternatives):
-        if len(attempts) >= max_teams:
-            break
-        names = sorted(a.name for a in team)
-        if tuple(names) in seen:
-            continue
-        seen.add(tuple(names))
-        missing = pool.missing(team, task)
-        if missing:
-            attempts.append(Attempt(names, "selection", f"does not cover {sorted(missing)}"))
-            continue
-        goals, why = greedy_decompose(task, team, sites)
-        if goals is None:
-            attempts.append(Attempt(names, "decomposition", why))
-            continue
+    if "solver" in kw or "checker" in kw:
+        raise ValueError("run_colored owns the solver: the world model differs per "
+                         "agent, so a plain solver would plan on the wrong grid")
+
+    def solve(grid, agents, **opts):
+        opts.pop("planner", None)
+        return solve_best_first(grid, agents, planner=planner_for(cgrid, agents, planner),
+                                **opts)
+
+    return run_pipeline(cgrid, pool, task, k, sites, strategy=strategy, horizon=horizon,
+                        max_nodes=max_nodes, max_teams=max_teams, solver=solve,
+                        precheck=sight_check(cgrid), **kw)
+
+
+def sight_check(cgrid):
+    """The precheck run_pipeline calls: a waypoint its owner cannot see is fatal."""
+
+    def check(team, goals):
         blind = blind_spots(cgrid, team, goals)
         if blind:
-            attempts.append(Attempt(names, "decomposition",
-                                    f"cannot see its site: {', '.join(sorted(blind))}",
-                                    goals=goals))
-            continue
-        members = {a.name: a for a in team}
-        mapf = {n: (members[n].start, g) for n, g in goals.items()}
-        paths, stats = solve_best_first(cgrid, mapf, horizon=horizon,
-                                        max_nodes=max_nodes, planner=planner_for(cgrid, team))
-        if paths is None:
-            why = "hit the node cap" if stats["hit_limit"] else "no conflict-free plan"
-            attempts.append(Attempt(names, "arbitration", why, goals=goals, stats=stats))
-            continue
-        ok, problems = verify(cgrid, mapf, paths)
-        if not ok:
-            attempts.append(Attempt(names, "verification", problems[0],
-                                    goals=goals, paths=paths, stats=stats))
-            continue
-        attempts.append(Attempt(names, "solved", "", goals=goals,
-                                paths=paths, stats=stats))
-        break
-    return PipelineResult(strategy, attempts)
+            return f"cannot see its site: {', '.join(sorted(blind))}"
+        return None
+
+    return check
 
 
 def describe(result):

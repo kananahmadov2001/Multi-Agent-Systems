@@ -90,12 +90,14 @@ class PipelineResult:
 def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZON,
                  max_nodes=MAX_NODES, max_teams=3, planner=plan_single,
                  solver=solve_best_first, checker=verify, decomposer=greedy_decompose,
-                 selector=select):
+                 selector=select, precheck=None):
     """Select, decompose, plan, verify; on failure try the next covering team.
 
     `max_teams` bounds the switch edge because each extra team is another full
     CBS run. A team that misses a required tag is never planned for: that is a
     selection failure by construction, which is what the breakdown reports.
+    `precheck(team, goals)` returns a reason string when the split is impossible
+    before the solver runs (the coloured domain uses it for unseen waypoints).
     """
     if max_teams < 1:
         raise ValueError("max_teams must be at least 1")
@@ -116,6 +118,10 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
         goals, why = decomposer(task, team, sites)
         if goals is None:
             attempts.append(Attempt(names, "decomposition", why))
+            continue
+        blocked = precheck(team, goals) if precheck else None
+        if blocked:
+            attempts.append(Attempt(names, "decomposition", blocked, goals=goals))
             continue
         assignment = {a.name: [t for t in task.order if sites[t] in goals[a.name]]
                       for a in team}
