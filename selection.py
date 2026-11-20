@@ -1,140 +1,86 @@
-"""Selection: pick exactly k agents whose adverts cover the task.
 
-cheapest / greedy / coverage on the same AgentPool interface, each returning
-ranked alternatives for team-level backtracking. Standard library only.
+"""Stage 1: the LLM, as the central agent, picks the team from natural-language descriptions.
 
-    python3 selection.py       # self-check: prints what each policy picks
+The LLM sees the task in words and each pool agent's own description (name and advert). It does
+not see capability tags, costs or start cells. It must return exactly k distinct pool agents.
+Whether that team can really do the task is NOT checked here: that is found out downstream, when
+decomposition or planning fails, and the pipeline calls propose_team again with the failed teams
+and the reasons so the LLM can repick. A team is never proposed twice. Standard library only.
 """
-from agent_pool import Agent, AgentPool, Task
+import json
+from math import comb
 
 
-class Selection:
-    """One policy's answer: the team, its cost, what it misses, and the fallbacks."""
-
-    def __init__(self, strategy, team, cost, missing, alternatives=()):
-        self.strategy = strategy
-        self.team = tuple(team)
-        self.cost = cost
-        self.missing = frozenset(missing)
-        self.alternatives = tuple(alternatives)
-
-    @property
-    def ok(self):
-        return not self.missing
-
-    @property
-    def names(self):
-        return [a.name for a in self.team]
-
-    def __repr__(self):
-        return (f"Selection({self.strategy}, {self.names}, cost={self.cost}, "
-                f"missing={sorted(self.missing)}, alternatives={len(self.alternatives)})")
+def make_selection_prompt(pool, task, k, history, notes=()):
+    lines = [f"You are the central agent. Choose a team of exactly {k} agents from the pool to carry out a task.",
+             "You know only what each agent says about itself.",
+             "", f"Task: {task.description}", "", "Pool (name: the agent's own description):"]
+    for a in sorted(pool, key=lambda a: a.name):
+        lines.append(f"  {a.name}: \"{a.advert}\"")
+    if history:
+        lines += ["", "Teams you already tried that did not work. Do not pick any of them again:"]
+        for h in history:
+            lines.append(f"  [{', '.join(h.names)}]: {h.detail or h.kind}")
+    if notes:
+        lines += ["", "Problems with your previous answer:"] + [f"  - {n}" for n in notes]
+    lines += ["", f"Pick agents whose descriptions together cover every part of the task. The team must have exactly {k} distinct agents from the pool.",
+              'Reply with ONLY this JSON, no other text: {"team": ["<agent name>", ...], "reason": "<one sentence>"}']
+    return "\n".join(lines)
 
 
-def _score_per_cost(agent, remaining):
-    gain = len(agent.capabilities & remaining)
-    return (gain / agent.cost, gain, -agent.cost)
+def parse_team(text):
+    """The LAST JSON object in `text` that has a list under "team", else None."""
+    decoder, found = json.JSONDecoder(), None
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(text[i:])
+        except ValueError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("team"), list):
+            found = obj["team"]
+    return found
 
 
-def _score_coverage(agent, remaining):
-    return (len(agent.capabilities & remaining), -agent.cost)
+def check_team(pool, k, team, tried):
+    """Problems with a proposed team (names only, no capability judgement). Empty is valid."""
+    if not all(isinstance(n, str) for n in team):
+        return ["the team must be a list of agent names"]
+    names = {a.name for a in pool}
+    problems = [f"{n!r} is not in the pool" for n in team if n not in names]
+    if len(set(team)) != len(team):
+        problems.append("the team has a repeated agent")
+    if len(team) != k:
+        problems.append(f"the team has {len(team)} agents, not exactly {k}")
+    if not problems and tuple(sorted(team)) in tried:
+        problems.append(f"[{', '.join(sorted(team))}] was already tried")
+    return problems
 
 
-def _greedy_team(pool, task, k, score):
-    """Add the best-scoring agent until k slots are used or nothing helps.
+def propose_team(pool, task, k, llm, history=(), stats=None, max_calls=3):
+    """Returns (team of Agent objects, None) or (None, reason).
 
-    Leftover slots are filled with the cheapest agents, because the proposal
-    fixes the team size at exactly k. Ties go to the alphabetically first name
-    (the pool is walked in name order), so a run is reproducible.
+    `history` holds the failed attempts so far (anything with .names, .kind, .detail); they are
+    shown to the LLM and excluded. `stats` accumulates llm_calls / invalid_answers.
     """
-    remaining = set(task.requires)
-    chosen = []
-    while len(chosen) < k and remaining:
-        options = [a for a in sorted(pool, key=lambda x: x.name)
-                   if a not in chosen and a.capabilities & remaining]
-        if not options:
-            break
-        best = max(options, key=lambda a: score(a, remaining))
-        chosen.append(best)
-        remaining -= best.capabilities
-    for a in sorted(pool, key=lambda x: (x.cost, x.name)):
-        if len(chosen) >= k:
-            break
-        if a not in chosen:
-            chosen.append(a)
-    return tuple(chosen)
-
-
-def _fallbacks(pool, task, k, chosen, limit):
-    """The next-cheapest covering teams, minus the one already chosen."""
-    taken = tuple(sorted(a.name for a in chosen))
-    ranked = pool.teams(task, k, limit + 1)
-    return tuple(t for t in ranked if tuple(sorted(a.name for a in t)) != taken)[:limit]
-
-
-def _cheapest(pool, task, k, limit):
-    ranked = pool.teams(task, k, limit)
-    return (ranked[0], tuple(ranked[1:])) if ranked else ((), ())
-
-
-def _greedy(pool, task, k, limit):
-    team = _greedy_team(pool, task, k, _score_per_cost)
-    return team, _fallbacks(pool, task, k, team, limit)
-
-
-def _coverage(pool, task, k, limit):
-    team = _greedy_team(pool, task, k, _score_coverage)
-    return team, _fallbacks(pool, task, k, team, limit)
-
-
-POLICIES = {"cheapest": _cheapest, "greedy": _greedy, "coverage": _coverage}
-
-
-def select(pool, task, k, strategy="cheapest", limit=5):
-    """Apply one policy. Returns a Selection even when no covering team exists."""
-    if k < 1:
-        raise ValueError("team size k must be at least 1")
-    if strategy not in POLICIES:
-        raise ValueError(f"unknown strategy {strategy!r}; have {sorted(POLICIES)}")
-    team, alternatives = POLICIES[strategy](pool, task, k, limit)
-    return Selection(strategy, team, pool.team_cost(team), pool.missing(team, task), alternatives)
-
-
-def main():
-    # Same task, two pools: the second is built so that greedy dead-ends.
-    simple = AgentPool([
-        Agent("a1", "walks around the grid and carries small boxes", cost=1.0),
-        Agent("a2", "flies over walls", cost=2.0),
-        Agent("a3", "moves on the ground and inspects rooms", cost=1.5),
-        Agent("a4", "carries heavy crates between rooms", cost=1.2),
-    ])
-    tricky = AgentPool([
-        Agent("g1", "moves and carries", cost=1.0),
-        Agent("g2", "moves", cost=0.4),
-        Agent("g3", "carries and inspects", cost=1.5),
-        Agent("g4", "inspects", cost=0.6),
-    ])
-    task = Task.from_text("move the crate, carry it to the bay and inspect it")
-
-    for label, pool, k in (("simple, k=2", simple, 2), ("tricky, k=2", tricky, 2)):
-        print(f"\n{label}  task requires {sorted(task.requires)}")
-        for strategy in POLICIES:
-            s = select(pool, task, k, strategy)
-            flag = "ok" if s.ok else f"MISSING {sorted(s.missing)}"
-            print(f"  {strategy:<9} {str(s.names):<22} cost={s.cost:<4} {flag:<18} "
-                  f"fallbacks={len(s.alternatives)}")
-
-    best = select(tricky, task, 2)
-    greedy = select(tricky, task, 2, "greedy")
-    assert best.names == ["g1", "g4"] and best.cost == 1.6
-    assert [[a.name for a in t] for t in best.alternatives] == [["g2", "g3"], ["g1", "g3"]]
-    assert not greedy.ok and greedy.missing == {"carry"}, greedy
-    assert len(greedy.team) == 2, "the team still has exactly k members"
-    assert select(tricky, task, 1, "cheapest").team == (), "no single agent covers it"
-    assert select(simple, task, 2, "coverage").ok
-    assert select(simple, task, 3).alternatives, "k=3 has cheaper fallbacks"
-    print("\nall checks passed")
-
-
-if __name__ == "__main__":
-    main()
+    stats = stats if stats is not None else {}
+    for key in ("llm_calls", "invalid_answers"):
+        stats.setdefault(key, 0)
+    if k > len(pool):
+        return None, f"k={k} is larger than the pool of {len(pool)}"
+    tried = {tuple(sorted(h.names)) for h in history}
+    if len([t for t in tried if len(t) == k]) >= comb(len(pool), k):
+        return None, f"every team of {k} has already been tried"
+    notes, last = [], "no reply"
+    for _ in range(max_calls):
+        stats["llm_calls"] += 1
+        team = parse_team(llm(make_selection_prompt(pool, task, k, history, notes)))
+        problems = ["the reply was not the required JSON with a \"team\" list"] if team is None \
+            else check_team(pool, k, team, tried)
+        if not problems:
+            by_name = {a.name: a for a in pool}
+            return tuple(by_name[n] for n in team), None
+        stats["invalid_answers"] += 1
+        notes, last = problems, problems[0]
+    return None, f"no valid team after {max_calls} call(s): {last}"
