@@ -1,0 +1,13 @@
+instance,sealed,scarce,strategy,solved,failure,teams_tried,team,team_cost,steps,nodes
+co1,-,1,cheapest,0,selection,1,,,,
+co1,-,1,greedy,0,selection,1,,,,
+co1,-,1,coverage,0,selection,1,,,,
+co2,-,1,cheapest,0,selection,1,,,,
+co2,-,1,greedy,0,selection,1,,,,
+co2,-,1,coverage,0,selection,1,,,,
+co3,-,1,cheapest,0,selection,1,,,,
+co3,-,1,greedy,0,selection,1,,,,
+co3,-,1,coverage,0,selection,1,,,,
+co4,-,1,cheapest,0,selection,1,,,,
+co4,-,1,greedy,0,selection,1,,,,
+co4,-,1,coverage,0,selection,1,,,,
