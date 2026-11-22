@@ -1,77 +1,161 @@
 # Multi-Agent-Systems
 
 CSE 5106 final project: centralized conflict resolution for independently planning agents.
-A central agent resolves collisions between agents' plans in three ways, all on the same
-Conflict-Based-Search tree: (1) a fixed best-first search (CBS), (2) an LLM that picks who to
-constrain, with no tree, and (3) the same tree with the LLM choosing which node to expand next.
 
-## Project code: how to run Approaches 1-3
+A central agent takes plans it did not write and repairs the collisions between them. We
+compare three ways of doing that, all over the same Conflict-Based Search tree:
 
-Needs Python 3.10+. Approach 1 with the Fast Downward planner also needs Fast Downward 24.06.1 unpacked **next to** this repo (`../fast-downward-24.06.1`).
+1. **CBS** — a fixed best-first search. No API calls.
+2. **LLM, no tree** — the model picks which agent to constrain, with no search structure.
+3. **LLM-guided CBS** — the same tree, with the model choosing which open node to expand.
 
-### Python setup
+A **no-LLM control** (approach 3 with the model replaced by "always take the cheapest node")
+is what every claim about LLM guidance is measured against.
+
+Around that sits a four-stage pipeline: select `k` agents from their advertised capabilities,
+decompose the task into an ordered route per agent, plan each route independently in PDDL with
+Fast Downward, then detect and arbitrate the collisions and verify the joint plan. A failed
+split backtracks to selection and tries the next covering team.
+
+## Setup
+
+Python 3.10+. Fast Downward 24.06.1 unpacked **next to** this repo (`../fast-downward-24.06.1`);
+build instructions are further down.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install anthropic
 ```
+
 Never commit a key. Set it only in your terminal (each new terminal needs it again):
+
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
-export ARBITER_MAX_CALLS=300      # hard stop on API calls per run (about $0.01 per call)
-# optional: export ARBITER_MODEL=claude-haiku-4-5-20251001   (cheaper; don't mix models in one table)
-# optional: export ARBITER_MAX_TOKENS=4000   (default 4000; the first live runs used 1500, which cut some replies off)
+export ARBITER_MODEL=claude-haiku-4-5-20251001   # bulk runs; don't mix models in one table
+export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per run
+# optional: export ARBITER_MAX_TOKENS=4000       (default 4000; the first live runs used 1500,
+#                                                 which cut some replies off)
 ```
 
-### Tests (free, no key)
+## Tests (free, no key)
+
 | Command | What it checks |
 |---|---|
-| `python3 cbs_baseline.py` | Approach 1: Conflict-Based Search, depth-first and best-first (toy cases) |
+| `python3 verify.py` | The independent plan checker (1 good plan, 7 bad plans rejected) |
+| `python3 cbs_baseline.py` | Approach 1: CBS, best-first and the depth-first ablation |
 | `python3 test_fd.py` | Approach 1 with Fast Downward as the low-level planner |
 | `python3 test_llm.py` | Approach 2 with fake LLMs |
 | `python3 test_hybrid.py` | Approach 3 with fake LLMs |
-| `python3 verify.py` | The independent plan checker (1 good plan, 7 bad plans rejected) |
 | `python3 instances.py` | The hard test cases and their backtrack counts |
-| `python3 bench.py` | All three approaches on the 25 hard cases, fake LLMs (checks the harness only) |
+| `python3 agent_pool.py` | Capability advertisement and tag matching |
+| `python3 selection.py` | The three selection policies and their ranked alternatives |
+| `python3 decompose.py` | Greedy, exhaustive and LLM decomposition |
+| `python3 pipeline.py` | The pipeline loop and the backtrack-to-selection edge |
+| `python3 pipeline_instances.py` | The capability-overlap domain |
+| `python3 colored_box.py` | The colored-box domain, where each agent sees a different grid |
+| `python3 check_fd_route.py` | The generated PDDL against `plan_route`, **without needing Fast Downward**. Add `--adversarial` or `--pipeline` |
+| `python3 control.py` | Approach 3's search with no LLM, on all 60 benchmark instances |
+| `python3 bench.py` | All three approaches on the hard cases with fake LLMs (harness only) |
 
-### Real model (costs money)
+Two diagnostics that need Fast Downward but no key:
+
 ```bash
-python3 test_llm.py --live            # Approach 2, real model, 2 toy cases
-python3 test_hybrid.py --live         # Approach 3, real model, 2 toy cases
-python3 bench.py --live --limit 3     # first 3 benchmark cases (about $1)
-python3 bench.py --live --start 5 --limit 8 --out results/new/batch.csv --log results/new/batch.jsonl   # next batch, with transcripts
-python3 bench.py --live --only pocket-5-mid --repeat 3 --out results/new/var.csv --log results/new/var.jsonl   # variance
-python3 analyze.py results/haiku/hard_haiku.csv results/haiku/hard_haiku.jsonl   # free: read a finished run
-python3 control.py                    # free: Approach 3's search with no LLM (always the cheapest node)
+python3 probe_e2e.py --fd "$FD" --fake     # the whole pipeline, stage by stage
+python3 check_search.py --fd "$FD"         # does the search configuration change what we get back?
 ```
-`bench.py` options: `--set easy|hard|random|sweep|all` (random = held-out unfiltered cases, sweep = 2/3/4 agents), `--start N`, `--limit N`, `--only NAME[,NAME]`, `--repeat R`, `--out FILE`, `--log FILE`, `--dfs` (also run the depth-first ablation).
-Use a different `--out` for each batch (the folder must exist: `mkdir -p results/new`). Ctrl+C is safe: finished instances are kept.
-A run counts as solved only if `verify.py` (an independent replay of all plans) accepts it.
 
-### Which file is which
-- Approach 1 (Conflict-Based Search, best-first; `solve` is the depth-first ablation): `cbs_baseline.py`, `fd_planner.py`, `test_fd.py`
-- Approach 2 (LLM, no tree, sees its own earlier decisions): `llm_arbitrator.py`, `test_llm.py`
-- Approach 3 (LLM-guided CBS: the LLM picks which open node to expand next, so it also decides when to backtrack): `hybrid.py`, `test_hybrid.py`
-- Evaluation: `instances.py`, `verify.py`, `bench.py`, `analyze.py`, `control.py`
+## Benchmarks
 
-### Results folder
+`$FD` is the Fast Downward directory, e.g. `export FD="$HOME/Desktop/CSE 5106/fast-downward-24.06.1"`.
+
+### Arbitration, fixed team (`bench_fd.py`)
+
+60 instances in three sets. Approach 1 only, and free, unless you pass `--live` or `--fakes`.
+
+```bash
+python3 bench_fd.py --set sweep --fd "$FD" --out /tmp/check.csv        # free, Approach 1
+python3 bench_fd.py --set hard --fd "$FD" --live --out results/new/hard.csv --log results/new/hard.jsonl
+python3 analyze.py results/fd/hard_fd_haiku.csv results/fd/hard_fd_haiku.jsonl   # free: read a finished run
+```
+
+Options: `--set easy|hard|random|sweep|all`, `--start N`, `--limit N`, `--only NAME[,NAME]`,
+`--repeat R`, `--search CONFIG`, `--a2-calls N`, `--a3-calls N`, `--fd-mode run|exec`.
+**Always pass `--out`** — the default overwrites a committed file.
+
+### The full pipeline (`pipeline_bench.py`)
+
+```bash
+# free: deterministic, no API calls
+python3 pipeline_bench.py --fd "$FD" --out results/new/p.csv
+python3 pipeline_bench.py --fd "$FD" --k 3 --arbiter hybrid --out results/new/control.csv   # the no-LLM control
+
+# costs money
+python3 pipeline_bench.py --fd "$FD" --k 3 --arbiter hybrid --live --out results/new/hybrid.csv
+python3 pipeline_bench.py --fd "$FD" --k 3 --arbiter llm --live --out results/new/llm.csv
+```
+
+Options: `--domain capability|colored`, `--k N`, `--arbiter cbs|hybrid|llm`,
+`--selector tag|llm`, `--decomposer greedy|llm`, `--live`, `--calls N`, `--max-teams N`,
+`--agents N`, `--size N`, `--walls F`, `--search CONFIG`, `--fd DIR`, `--out FILE`.
+
+Without `--live`, an LLM arbiter runs on a scripted fake that always takes the first option —
+which is exactly the no-LLM control, at no cost. **Pass `--out` whenever you change `--k` or
+`--agents`**: the default filename does not encode them, so a sweep will overwrite itself.
+
+Create an output folder before writing to it (`mkdir -p results/new`). Ctrl+C is safe:
+finished instances are kept.
+
+A run counts as solved only if `verify.py` — an independent replay of every plan, written
+without reference to the search code — accepts it.
+
+## Which file is which
+
+| Area | Files |
+|---|---|
+| Approach 1 (CBS, best-first; `solve` is the depth-first ablation) | `cbs_baseline.py`, `fd_planner.py`, `test_fd.py` |
+| Approach 2 (LLM, no tree) | `llm_arbitrator.py`, `test_llm.py` |
+| Approach 3 (LLM-guided CBS) | `hybrid.py`, `test_hybrid.py` |
+| Pipeline stages 1–2 | `agent_pool.py`, `selection.py`, `llm_select.py`, `decompose.py` |
+| Pipeline loop and domains | `pipeline.py`, `pipeline_instances.py`, `colored_box.py` |
+| Evaluation | `instances.py`, `verify.py`, `bench.py`, `bench_fd.py`, `pipeline_bench.py`, `analyze.py`, `control.py` |
+| Diagnostics | `probe_e2e.py`, `check_fd_route.py`, `check_search.py` |
+
+## Results folder
+
 | Folder | What it holds |
 |---|---|
-| `results/haiku/` | Main runs, model `claude-haiku-4-5-20251001`: `hard_haiku` (25 hard cases), `random_haiku` (20 unfiltered cases), `sweep_haiku` (2/3/4 agents), `var_haiku` (10 hard cases x 3 repeats). Caps: 20 calls (Approach 2), 50 calls (Approach 3). |
-| `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap (Haiku). |
-| `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. A larger Sonnet comparison is planned. |
-| `results/control/` | `control.txt`: output of `control.py`, Approach 3's search with no LLM. |
+| `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `hard_fd_haiku`, `random_fd_haiku`, `sweep_fd_haiku`, `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search). |
+| `results/pipeline/` | Pipeline runs. `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_colored`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). |
+| `results/haiku/` | Earlier arbitration runs on our own grid planner, kept so the PDDL numbers can be compared against them. |
+| `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap. |
+| `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. |
+| `results/control/` | `control.txt`: output of `control.py`. |
 | `results/first_run_depth_first/` | **First run only, kept for the record.** Made with the earlier depth-first version of Approach 1 and a 1,500-token reply limit that cut some replies off. Do not mix with the tables above. |
 
-Each run has a `.csv` (one row per instance and approach) and a `.jsonl` (every prompt and reply). Do not mix models in one table.
+Each run has a `.csv` (one row per instance and approach) and, for live runs, a `.jsonl` with
+every prompt and reply. Do not mix models in one table.
 
-### Known differences from the proposal
-- Agent selection, decomposition, agent-written PDDL with a fixed vocabulary, and the capability-overlap / colored-box domains are not built yet (planned for the final paper).
-- The live runs use our own grid planner as the low-level planner; Fast Downward is checked against it (`test_fd.py`) but not yet used in the live runs.
-- Approach 3 stops at the first conflict-free plan it generates, so its plans are not guaranteed cheapest (Approach 1 is optimal).
+## Known differences from the proposal
+
+- **PDDL is compiled, not authored.** The proposal says each agent *writes* its PDDL under a
+  vocabulary the central agent fixes. Each agent *solves* its own PDDL, but the problem file is
+  generated by the harness from a fixed two-action domain. An LLM selector and decomposer are
+  implemented (`--selector llm`, `--decomposer llm`); an LLM that writes PDDL is not.
+- **Conflicts are contested cells only.** We did not grow conflict detection to resource and
+  ordering conflicts.
+- **Our swap constraint is stronger than standard CBS.** A swap forbids each agent's destination
+  cell rather than the edge, so the tree is incomplete and Approach 1's optimality is relative to
+  our constraint scheme, not to the instance.
+- **Approach 3 stops at the first conflict-free plan it generates**, so its plans are not
+  guaranteed cheapest.
+- **The satisficing claim is retracted.** The midterm said optimality is conditional on the
+  low-level planner, holding for `astar(lmcut())` but not for a satisficing configuration. It is
+  not: `check_search.py` finds identical plans, not merely identical costs, on all 38 of 40
+  random cases both configurations solved. The time-expanded encoding fixes plan cost by the goal
+  layer reached rather than the route taken, so a satisficing search has nothing to trade.
 
 ---
-
 
 ## Setup: Fast Downward (macOS, build from source)
 
@@ -295,4 +379,6 @@ with the absolute path, e.g. `c:\CSE5106\Multi-Agent-Systems`.
   through the `aibasel/downward` container with the PDDL folder mounted
   at `/shared`, as shown in the Windows section above.
 
-Using Claude Sonnet 5.5 for initial tests, can see if we want to compare other models if costs permit, otherwise Sonnet 5.5 is a good benchmark
+Bulk runs use Claude Haiku 4.5 (`ARBITER_MODEL=claude-haiku-4-5-20251001`), which is about
+nine times cheaper per call in measured spend. Sonnet 5.5 was used for a two-instance spot
+check only. Do not mix models within one results table.
