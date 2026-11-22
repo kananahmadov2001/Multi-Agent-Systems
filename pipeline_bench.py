@@ -217,7 +217,10 @@ def main():
     a = ap.parse_args()
 
     strategies = [s.strip() for s in a.strategies.split(",") if s.strip()]
-    if a.selector == "llm" or a.decomposer == "llm":
+    # Only the selector names the strategy column, so only it collapses the sweep.
+    # An LLM decomposer still runs under each tag policy in turn; collapsing for it
+    # too hands select() a policy name it does not have.
+    if a.selector == "llm":
         strategies = ["llm"]
     unknown = [s for s in strategies if s not in POLICIES and s != "llm"]
     if unknown:
