@@ -6,7 +6,7 @@ later part and is neither complete nor optimality-preserving. Standard library o
     python3 ordering.py       # self-check, no API calls
 """
 from cbs_baseline import plan_single, solve_best_first
-from verify import verify
+from verify import verify, verify_order
 
 
 def _waypoints(goal):
@@ -98,8 +98,19 @@ def solve_ordered(grid, agents, task, parts, solver=solve_best_first,
     if max_repairs < 0:
         raise ValueError("max_repairs must be nonnegative")
     release = {agent: {} for agent in agents}
-    route_keys = {(start, _goal_key(goal)): agent
-                  for agent, (start, goal) in agents.items()}
+    # Releases are routed back to an agent by its start and route, which is all
+    # the planner callback is given. Two agents with the same pair would be
+    # indistinguishable there and would silently inherit each other's releases,
+    # so refuse the instance instead of misattributing them.
+    route_keys = {}
+    for agent, (start, goal) in sorted(agents.items()):
+        key = (start, _goal_key(goal))
+        if key in route_keys:
+            return None, {"ordering_conflicts": 0, "ordering_repairs": 0,
+                          "ordering_rounds": 0, "hit_limit": False,
+                          "ordering_error": (f"{agent} and {route_keys[key]} share a start "
+                                             "and route; releases cannot be told apart")}
+        route_keys[key] = agent
 
     def released_planner(g, start, goal, constraints, h):
         agent = route_keys[(start, _goal_key(goal))]
@@ -129,6 +140,12 @@ def solve_ordered(grid, agents, task, parts, solver=solve_best_first,
             return None, total
         total["ordering_conflicts"] += len(conflicts)
         if not conflicts:
+            # the detector says the order holds; now ask verify.py, which does
+            # not share a line of code with it
+            ok, problems = verify_order(agents, paths, task, parts)
+            if not ok:
+                total["ordering_error"] = f"independent order check disagrees: {problems[0]}"
+                return None, total
             return paths, total
         if total["ordering_repairs"] + len(conflicts) > max_repairs:
             total["ordering_error"] = (f"ordering repair exhausted after "

@@ -54,17 +54,29 @@ def _rname(cell, served, t):
     return f"c{cell[0]}_{cell[1]}_{served}_{t}"
 
 
-def as_route(goal):
+def as_route(goal, constraints=frozenset()):
     """A goal as a tuple of cells, consecutive repeats dropped.
 
     Matches plan_route, which serves waypoints in order and so gains nothing
     from a repeat of the cell it is already standing on.
+
+    A release constraint names a waypoint by its index, so dropping a repeat
+    would renumber the waypoints underneath it. When any release is present
+    the route is left exactly as given, which is what plan_route does too;
+    the two must agree on what index 2 means or the planners diverge.
     """
     route = tuple(goal) if _is_waypoints(goal) else (goal,)
-    route = tuple(c for i, c in enumerate(route) if i == 0 or c != route[i - 1])
+    if not releases_of(constraints):
+        route = tuple(c for i, c in enumerate(route) if i == 0 or c != route[i - 1])
     if not route:
         raise ValueError("a goal must be one cell or a non-empty list of cells")
     return route
+
+
+def releases_of(constraints):
+    """{waypoint index: earliest service time} from ("release", index, time)."""
+    return {e[1]: e[2] for e in constraints
+            if len(e) == 3 and e[0] == "release"}
 
 
 def _problem(objects, start, facts):
@@ -77,7 +89,8 @@ def _problem(objects, start, facts):
 def make_problem(grid, start, goal, constraints, horizon):
     """One cell as the goal. The agent parks there, so it may only finish once
     that cell is forbidden no longer, the rule cbs_baseline.plan_single uses."""
-    last_block = _last_vertex_block(constraints, goal)
+    last_block = max(_last_vertex_block(constraints, goal),
+                     releases_of(constraints).get(0, 0) - 1)
     if last_block >= horizon:
         return None
     nodes, edges = [], []
@@ -110,7 +123,11 @@ def make_route_problem(grid, start, route, constraints, horizon):
     goal copies start after the last time that cell is forbidden.
     """
     last = len(route)
-    last_block = _last_vertex_block(constraints, route[-1])
+    releases = releases_of(constraints)
+    if releases and any(x == y for x, y in zip(route, route[1:])):
+        return None              # same guard plan_route uses: no distinct arrival
+    last_block = max(_last_vertex_block(constraints, route[-1]),
+                     releases.get(last - 1, 0) - 1)
     if last_block >= horizon:
         return None
     cells = [(r, k) for r in range(grid.h) for k in range(grid.w) if grid.free((r, k))]
@@ -127,11 +144,13 @@ def make_route_problem(grid, start, route, constraints, horizon):
                     if (n, t + 1) in constraints or (a, n, t) in constraints:
                         continue
                     nxt = s + 1 if s < last and n == route[s] else s
+                    if nxt != s and t + 1 < releases.get(s, 0):
+                        nxt = s          # too early to serve: pass through only
                     edges.append(f"(edge {_rname(a, s, t)} {_rname(n, nxt, t + 1)})")
     goals = [f"(goal-node {_rname(route[-1], last, t)})"
              for t in range(last_block + 1, horizon + 1)
              if (route[-1], t) not in constraints]
-    served = 1 if start == route[0] else 0
+    served = 1 if start == route[0] and releases.get(0, 0) <= 0 else 0
     return _problem(nodes, _rname(start, served, 0), edges + goals)
 
 
@@ -143,7 +162,7 @@ def make_fd_planner(fd_dir, search='astar(lmcut())'):
     def plan(grid, start, goal, constraints, horizon):
         if (start, 0) in constraints:
             return None
-        route = as_route(goal)
+        route = as_route(goal, constraints)
         key = (start, route, frozenset(constraints), horizon)
         if key in cache:
             return cache[key]

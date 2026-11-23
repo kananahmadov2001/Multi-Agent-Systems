@@ -18,6 +18,42 @@ def _waypoints(goal):
     return [goal]
 
 
+def verify_order(agents, paths, task, parts):
+    """Independent check that parts are served in the task's order.
+
+    Service times are replayed here rather than taken from ordering.py, for
+    the same reason as the rest of this file: the function that drives the
+    repair loop must not also be the one that approves its result. "Before"
+    is strict, so serving two parts in one step is a violation.
+    """
+    when, problems = {}, []
+    for a in sorted(agents):
+        route, labels = _waypoints(agents[a][1]), list(parts.get(a, []))
+        if not labels:
+            continue
+        if len(route) != len(labels):
+            problems.append(f"order: {a} has {len(route)} waypoints for {len(labels)} parts")
+            continue
+        path, k = paths.get(a), 0
+        if not path:
+            problems.append(f"order: {a} has no path")
+            continue
+        for t, cell in enumerate(path):
+            if k < len(route) and cell == route[k]:
+                if labels[k] in when:
+                    problems.append(f"order: part {labels[k]!r} is served more than once")
+                when[labels[k]] = t
+                k += 1
+        if k < len(route):
+            problems.append(f"order: {a} serves only {k} of {len(route)} parts")
+    for x, y in zip(task.order, task.order[1:]):
+        if x not in when or y not in when:
+            problems.append(f"order: no service time for {x!r} or {y!r}")
+        elif when[x] >= when[y]:
+            problems.append(f"order: {x} at t={when[x]} is not before {y} at t={when[y]}")
+    return (not problems), problems
+
+
 def verify(grid, agents, paths):
     """Returns (ok, problems). `paths` is {agent: [cell at t=0, t=1, ...]}.
 
