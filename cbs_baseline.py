@@ -47,8 +47,18 @@ def _is_waypoints(goal):
     return isinstance(goal, tuple) and bool(goal) and isinstance(goal[0], (list, tuple))
 
 
+def _last_vertex_block(constraints, cell):
+    """Latest time `cell` is forbidden outright.
+
+    Constraints are either a vertex ban (cell, time) or an edge ban
+    (from, to, time); only the former stops an agent from standing somewhere.
+    """
+    return max((e[1] for e in constraints if len(e) == 2 and e[0] == cell),
+               default=-1)
+
+
 def plan_single(grid, start, goal, constraints, horizon):
-    """Shortest-time path honoring (cell, time) constraints, or None.
+    """Shortest-time path honoring vertex and edge bans, or None.
 
     `goal` is one cell, or a list of cells to visit in order; the second form is
     what lets one agent serve two parts of a task (see plan_route).
@@ -59,7 +69,7 @@ def plan_single(grid, start, goal, constraints, horizon):
         return None
     # The agent must be able to sit on its goal, so it may only finish after
     # the last time the goal cell is forbidden.
-    last_block = max((t for (c, t) in constraints if c == goal), default=-1)
+    last_block = _last_vertex_block(constraints, goal)
     q = deque([(start, 0)])
     parent = {(start, 0): None}
     while q:
@@ -73,7 +83,8 @@ def plan_single(grid, start, goal, constraints, horizon):
         if t >= horizon:
             continue
         for n in grid.neighbors(cell):
-            if (n, t + 1) in constraints or (n, t + 1) in parent:
+            if ((n, t + 1) in constraints or (cell, n, t) in constraints
+                    or (n, t + 1) in parent):
                 continue
             parent[(n, t + 1)] = (cell, t)
             q.append((n, t + 1))
@@ -94,7 +105,7 @@ def plan_route(grid, start, goals, constraints, horizon):
         raise ValueError("plan_route needs at least one goal")
     if (start, 0) in constraints:
         return None
-    last_block = max((t for (c, t) in constraints if c == goals[-1]), default=-1)
+    last_block = _last_vertex_block(constraints, goals[-1])
 
     served = 1 if start == goals[0] else 0
     q = deque([(start, served, 0)])
@@ -110,7 +121,7 @@ def plan_route(grid, start, goals, constraints, horizon):
         if t >= horizon:
             continue
         for n in grid.neighbors(cell):
-            if (n, t + 1) in constraints:
+            if (n, t + 1) in constraints or (cell, n, t) in constraints:
                 continue
             nxt = done + 1 if done < len(goals) and n == goals[done] else done
             key = (n, nxt, t + 1)
@@ -128,8 +139,17 @@ def pos_at(path, t):
     return path[min(t, len(path) - 1)]  # agents wait at their goal
 
 
-def find_conflict(paths):
-    """Earliest conflict. Returns {agent: (cell, time) to forbid} or None."""
+def find_conflict(paths, mode="vertex"):
+    """Earliest conflict. Returns {agent: constraint} or None.
+
+    mode="vertex"   a swap is resolved by forbidding each agent the cell it
+                    would enter, (cell, time). This is stronger than standard
+                    CBS: it also stops the agent reaching that cell by another
+                    route, so the tree is incomplete and an optimal solution can
+                    be pruned.
+    mode="standard" a swap adds an edge ban (from, to, time) instead, which is
+                    the scheme of Sharon et al. 2015 and keeps the tree complete.
+    """
     agents = sorted(paths)
     horizon = max(len(p) for p in paths.values())
     for t in range(horizon):
@@ -139,18 +159,22 @@ def find_conflict(paths):
                 return {a: (cell, t), b: (cell, t)}
             if (pos_at(paths[a], t) == pos_at(paths[b], t + 1)
                     and pos_at(paths[a], t + 1) == pos_at(paths[b], t)):  # swap
+                if mode == "standard":
+                    return {a: (pos_at(paths[a], t), pos_at(paths[a], t + 1), t),
+                            b: (pos_at(paths[b], t), pos_at(paths[b], t + 1), t)}
                 return {a: (pos_at(paths[a], t + 1), t + 1),
                         b: (pos_at(paths[b], t + 1), t + 1)}
     return None
 
 
 def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
-          planner=plan_single):
+          planner=plan_single, conflicts="vertex"):
     """
     agents: {name: (start, goal)}
     planner: low-level single-agent planner (plan_single, or the Fast Downward one)
     rule:   function taking [agent, agent] -> same agents in the order to try
             constraining. THIS is the 'fixed rule' (alphabetical by default).
+    conflicts: "vertex" (our stronger swap rule) or "standard" (edge constraints).
     """
     stats = {"nodes": 0, "replans": 0, "backtracks": 0, "hit_limit": False}
 
@@ -167,7 +191,7 @@ def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
         if stats["nodes"] > max_nodes:
             stats["hit_limit"] = True
             return None
-        conflict = find_conflict(paths)
+        conflict = find_conflict(paths, mode=conflicts)
         if conflict is None:
             return paths
         for agent in rule(list(conflict)):
@@ -194,7 +218,7 @@ def solve(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
 
 
 def solve_best_first(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
-                     planner=plan_single):
+                     planner=plan_single, conflicts="vertex"):
     """
     Conflict-Based Search as in Sharon et al. 2015: a priority queue of tree nodes ordered by the
     total cost (sum of path lengths). Each expansion picks the first conflict and creates BOTH
@@ -225,7 +249,7 @@ def solve_best_first(grid, agents, rule=sorted, horizon=30, max_nodes=2000,
         if stats["nodes"] > max_nodes:
             stats["hit_limit"] = True
             return None, stats
-        conflict = find_conflict(paths)
+        conflict = find_conflict(paths, mode=conflicts)
         if conflict is None:
             return paths, stats
         for agent in rule(list(conflict)):

@@ -5,7 +5,8 @@ cbs_baseline.plan_single, including its ordered-waypoint goals.
 Trick for "forbid (cell, t)": PDDL has no clock, so every cell is copied once
 per time step (object c<row>_<col>_<t>). A move goes from (cell, t) to
 (neighbor, t+1). A forbidden (cell, t) simply has no copy, so no move can
-enter it. Waiting is a move from (cell, t) to (cell, t+1).
+enter it. An edge ban (from, to, t) omits that one edge fact instead. Waiting
+is a move from (cell, t) to (cell, t+1).
 
 A goal may be one cell or an ordered list of cells to visit in order, the
 second form being what cbs_baseline.plan_route accepts. The two are encoded
@@ -28,7 +29,7 @@ import os
 import subprocess
 import tempfile
 
-from cbs_baseline import _is_waypoints      # one definition of "goal is a route"
+from cbs_baseline import Grid, _is_waypoints, _last_vertex_block   # shared goal and ban rules
 
 DOMAIN = """(define (domain timed-grid)
   (:requirements :strips :typing)
@@ -76,7 +77,7 @@ def _problem(objects, start, facts):
 def make_problem(grid, start, goal, constraints, horizon):
     """One cell as the goal. The agent parks there, so it may only finish once
     that cell is forbidden no longer, the rule cbs_baseline.plan_single uses."""
-    last_block = max((t for (c, t) in constraints if c == goal), default=-1)
+    last_block = _last_vertex_block(constraints, goal)
     if last_block >= horizon:
         return None
     nodes, edges = [], []
@@ -92,7 +93,7 @@ def make_problem(grid, start, goal, constraints, horizon):
                 if not grid.free(a) or (a, t) in constraints:
                     continue
                 for n in grid.neighbors(a):
-                    if (n, t + 1) not in constraints:
+                    if (n, t + 1) not in constraints and (a, n, t) not in constraints:
                         edges.append(f"(edge {_name(a, t)} {_name(n, t + 1)})")
     goals = [f"(goal-node {_name(goal, t)})"
              for t in range(last_block + 1, horizon + 1)
@@ -109,7 +110,7 @@ def make_route_problem(grid, start, route, constraints, horizon):
     goal copies start after the last time that cell is forbidden.
     """
     last = len(route)
-    last_block = max((t for (c, t) in constraints if c == route[-1]), default=-1)
+    last_block = _last_vertex_block(constraints, route[-1])
     if last_block >= horizon:
         return None
     cells = [(r, k) for r in range(grid.h) for k in range(grid.w) if grid.free((r, k))]
@@ -123,7 +124,7 @@ def make_route_problem(grid, start, route, constraints, horizon):
                 if (a, t) in constraints:
                     continue
                 for n in grid.neighbors(a):
-                    if (n, t + 1) in constraints:
+                    if (n, t + 1) in constraints or (a, n, t) in constraints:
                         continue
                     nxt = s + 1 if s < last and n == route[s] else s
                     edges.append(f"(edge {_rname(a, s, t)} {_rname(n, nxt, t + 1)})")
@@ -175,3 +176,28 @@ def make_fd_planner(fd_dir, search='astar(lmcut())'):
 
     plan.calls = 0
     return plan
+
+
+def main():
+    """Check the encoding without invoking Fast Downward."""
+    grid = Grid(["..", ".."])
+    # A vertex ban leaves no copy of that cell at that time, so it cannot be entered.
+    text = make_problem(grid, (0, 0), (0, 1), frozenset({((0, 1), 2)}), 3)
+    assert "c0_1_2" not in text
+    assert "(goal-node c0_1_3)" in text
+    # An edge ban removes only that direction at that time.
+    text = make_problem(grid, (0, 0), (0, 1), frozenset({((0, 0), (0, 1), 0)}), 3)
+    assert "(edge c0_0_0 c0_1_1)" not in text
+    assert "(edge c0_1_0 c0_0_1)" in text
+    # An edge ban must not be read as a vertex ban on its first cell.
+    assert "(goal-node c0_1_0)" in text
+    # A route honours both kinds of ban too.
+    text = make_route_problem(grid, (0, 0), ((0, 1), (1, 1)),
+                              frozenset({((0, 0), (0, 1), 0)}), 4)
+    assert "(edge c0_0_0_0 c0_1_1_1)" not in text
+    assert "(goal-node c1_1_2_4)" in text
+    print("all checks passed")
+
+
+if __name__ == "__main__":
+    main()
