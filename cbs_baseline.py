@@ -50,8 +50,8 @@ def _is_waypoints(goal):
 def _last_vertex_block(constraints, cell):
     """Latest time `cell` is forbidden outright.
 
-    Constraints are either a vertex ban (cell, time) or an edge ban
-    (from, to, time); only the former stops an agent from standing somewhere.
+    Constraints may be vertex bans, edge bans, or internal waypoint releases;
+    only a vertex ban stops an agent from standing somewhere.
     """
     return max((e[1] for e in constraints if len(e) == 2 and e[0] == cell),
                default=-1)
@@ -98,16 +98,23 @@ def plan_route(grid, start, goals, constraints, horizon):
     been reached, and reaching one is instantaneous, which matches the conflict
     model where a cell is occupied at a time step. After the last waypoint the
     agent parks there, so it may only finish after that cell is last forbidden,
-    the same rule plan_single uses for a single goal.
+    the same rule plan_single uses for a single goal. An internal constraint
+    ("release", waypoint_index, time) delays service but not earlier transit.
     """
-    goals = tuple(g for i, g in enumerate(goals) if i == 0 or g != goals[i - 1])
+    raw_goals = tuple(goals)
+    releases = {e[1]: e[2] for e in constraints
+                if len(e) == 3 and e[0] == "release"}
+    if releases and any(a == b for a, b in zip(raw_goals, raw_goals[1:])):
+        return None  # consecutive services on one cell have no distinct arrival
+    goals = (raw_goals if releases else
+             tuple(g for i, g in enumerate(raw_goals) if i == 0 or g != raw_goals[i - 1]))
     if not goals:
         raise ValueError("plan_route needs at least one goal")
     if (start, 0) in constraints:
         return None
     last_block = _last_vertex_block(constraints, goals[-1])
 
-    served = 1 if start == goals[0] else 0
+    served = 1 if start == goals[0] and releases.get(0, 0) <= 0 else 0
     q = deque([(start, served, 0)])
     parent = {(start, served, 0): None}
     while q:
@@ -123,7 +130,8 @@ def plan_route(grid, start, goals, constraints, horizon):
         for n in grid.neighbors(cell):
             if (n, t + 1) in constraints or (cell, n, t) in constraints:
                 continue
-            nxt = done + 1 if done < len(goals) and n == goals[done] else done
+            nxt = (done + 1 if done < len(goals) and n == goals[done]
+                   and t + 1 >= releases.get(done, 0) else done)
             key = (n, nxt, t + 1)
             if key in parent:
                 continue

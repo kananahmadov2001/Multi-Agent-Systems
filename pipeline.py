@@ -11,6 +11,7 @@ from selection import select
 from cbs_baseline import Grid, plan_single, solve_best_first
 from verify import verify
 from decompose import greedy_decompose
+from ordering import describe_conflict, ordering_conflicts, solve_ordered
 
 HORIZON = 20
 MAX_NODES = 2000
@@ -90,7 +91,7 @@ class PipelineResult:
 def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZON,
                  max_nodes=MAX_NODES, max_teams=3, planner=plan_single,
                  solver=solve_best_first, checker=verify, decomposer=greedy_decompose,
-                 selector=select, precheck=None):
+                 selector=select, precheck=None, ordering="off", max_ordering_repairs=8):
     """Select, decompose, plan, verify; on failure try the next covering team.
 
     `max_teams` bounds the switch edge because each extra team is another full
@@ -98,9 +99,15 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
     selection failure by construction, which is what the breakdown reports.
     `precheck(team, goals)` returns a reason string when the split is impossible
     before the solver runs (the coloured domain uses it for unseen waypoints).
+    ordering="check" rejects cross-agent order violations; "repair" additionally
+    runs bounded heuristic repair, supported only by the built-in grid CBS solver.
     """
     if max_teams < 1:
         raise ValueError("max_teams must be at least 1")
+    if ordering not in ("off", "check", "repair"):
+        raise ValueError(f"unknown ordering mode {ordering!r}")
+    if max_ordering_repairs < 0:
+        raise ValueError("max_ordering_repairs must be nonnegative")
     chosen = selector(pool, task, k, strategy)
     candidates = [chosen.team] + list(chosen.alternatives)
     seen, attempts = set(), []
@@ -123,13 +130,34 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
         if blocked:
             attempts.append(Attempt(names, "decomposition", blocked, goals=goals))
             continue
-        assignment = {a.name: [t for t in task.order if sites[t] in goals[a.name]]
-                      for a in team}
+        parts = getattr(goals, "parts", None)
+        if ordering != "off" and parts is None:
+            attempts.append(Attempt(names, "decomposition",
+                                    "ordering requires a part-labelled decomposition", goals=goals))
+            continue
+        if ordering == "off" or parts is None:
+            assignment = {a.name: [t for t in task.order if sites[t] in goals[a.name]]
+                          for a in team}
+        else:
+            assignment = {a.name: list(parts.get(a.name, [])) for a in team}
         members = {a.name: a for a in team}
         mapf = {n: (members[n].start, g) for n, g in goals.items()}
-        paths, stats = solver(grid, mapf, horizon=horizon, max_nodes=max_nodes, planner=planner)
+        if ordering == "repair":
+            if solver is not solve_best_first or planner is not plan_single:
+                attempts.append(Attempt(names, "arbitration",
+                                        "ordering repair requires the built-in grid CBS solver",
+                                        goals=goals, assignment=assignment))
+                continue
+            paths, stats = solve_ordered(grid, mapf, task, assignment, solver=solver,
+                                         planner=planner, checker=checker, horizon=horizon,
+                                         max_nodes=max_nodes, max_repairs=max_ordering_repairs)
+        else:
+            paths, stats = solver(grid, mapf, horizon=horizon, max_nodes=max_nodes,
+                                  planner=planner)
         if paths is None:
-            why = "hit the node cap" if stats["hit_limit"] else "no conflict-free plan"
+            why = stats.get("ordering_error")
+            if not why:
+                why = "hit the node cap" if stats["hit_limit"] else "no conflict-free plan"
             attempts.append(Attempt(names, "arbitration", why, goals=goals, stats=stats,
                                     assignment=assignment))
             continue
@@ -139,6 +167,20 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
                                     goals=goals, paths=paths, stats=stats,
                                     assignment=assignment))
             continue
+        if ordering != "off":
+            stats = dict(stats)
+            conflicts, order_problems = ordering_conflicts(task, paths, mapf, assignment)
+            if ordering == "check":
+                stats.update(ordering_conflicts=len(conflicts), ordering_repairs=0,
+                             ordering_rounds=1)
+            if order_problems or conflicts:
+                why = (order_problems[0] if order_problems else
+                       "ordering repair returned an invalid plan" if ordering == "repair" else
+                       describe_conflict(conflicts[0]))
+                attempts.append(Attempt(names, "verification", why,
+                                        goals=goals, paths=paths, stats=stats,
+                                        assignment=assignment))
+                continue
         attempts.append(Attempt(names, "solved", "", goals=goals, paths=paths, stats=stats,
                                 assignment=assignment))
         break
@@ -161,6 +203,9 @@ def describe(result):
             line = f"     nodes={a.stats['nodes']} replans={a.stats['replans']}"
             if a.paths:
                 line += f" steps={sum(len(p) - 1 for p in a.paths.values())}"
+            if "ordering_conflicts" in a.stats:
+                line += (f" ordering_conflicts={a.stats['ordering_conflicts']}"
+                         f" ordering_repairs={a.stats['ordering_repairs']}")
             lines.append(line)
     lines.append(f"  ok={result.ok} names={result.names} failure={result.failure}")
     return "\n".join(lines)
@@ -219,6 +264,27 @@ def main():
                          {"move": (0, 2), "carry": (2, 2), "inspect": (2, 4)})
     assert three.ok, three.attempts
     assert three.goals == {"g1": [(0, 2), (2, 2)], "g4": [(2, 4)]}, three.goals
+
+    order_grid = Grid(["...", "...", "..."])
+    ordered_pool = AgentPool([
+        Agent("o1", "carries crates", start=(0, 0)),
+        Agent("o2", "inspects rooms", start=(0, 2)),
+    ])
+    ordered_task = Task("carry then inspect", {"carry", "inspect"}, ("carry", "inspect"))
+    order_sites = {"carry": (2, 2), "inspect": (0, 1)}
+    plain = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites)
+    assert plain.ok, "default mode must keep accepting the spatially valid plan"
+    checked = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
+                           ordering="check")
+    assert not checked.ok and checked.failure == "verification", checked.attempts
+    assert checked.attempts[0].stats["ordering_conflicts"] == 1
+    fixed = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
+                         ordering="repair")
+    assert fixed.ok and fixed.stats["ordering_repairs"] == 1, fixed.attempts
+    assert fixed.stats["ordering_rounds"] == 2
+    unsupported = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
+                               solver=lambda *args, **kwargs: (None, {}), ordering="repair")
+    assert not unsupported.ok and "requires" in unsupported.attempts[0].detail
 
     print("\nall checks passed")
 

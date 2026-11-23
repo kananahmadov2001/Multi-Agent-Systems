@@ -71,9 +71,19 @@ def preflight(task, team, sites):
     return None
 
 
+class GoalMap(dict):
+    """Waypoint lists that remain a dict, plus the parts that produced them."""
+
+    def __init__(self, goals, parts):
+        super().__init__(goals)
+        self.parts = parts
+
+
 def goals_from_routes(team, sites, routes):
-    """{agent: [part, ...]} -> {agent: [cell, ...]}; a member with no part waits on its start."""
-    return {a.name: ([sites[p] for p in routes.get(a.name, [])] or [a.start]) for a in team}
+    """Keep both {agent: [cell, ...]} and the part name behind each waypoint."""
+    goals = {a.name: ([sites[p] for p in routes.get(a.name, [])] or [a.start]) for a in team}
+    parts = {a.name: list(routes.get(a.name, [])) for a in team}
+    return GoalMap(goals, parts)
 
 
 # ---------- Decomposers 1 and 2: free, tag-based ----------
@@ -257,6 +267,7 @@ def main():
     t2 = Task.from_text("carry the crate and inspect it")
     goals, why = greedy_decompose(t2, two, {"carry": (2, 2), "inspect": (2, 3)})
     assert why is None and goals == {"c1": [(2, 2), (2, 3)], "c2": [(0, 4)]}, goals
+    assert goals.parts == {"c1": ["carry", "inspect"], "c2": []}, goals.parts
 
     # greedy is not always optimal: a1 is nearer the carry site but is the only inspector
     team = [Agent("a1", "carries crates and inspects rooms", start=(0, 0)),

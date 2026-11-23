@@ -29,6 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
 FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "teams_tried",
           "team", "team_cost", "steps", "nodes", "fd_calls", "llm_calls", "arbiter")
+ORDER_FIELDS = ("ordering", "ordering_conflicts", "ordering_repairs", "ordering_rounds")
 OUTCOMES = ("solved", "selection", "decomposition", "arbitration", "verification")
 
 
@@ -108,8 +109,8 @@ def make_solver(arbiter, llm, calls):
 
 
 def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
-        arbiter="cbs", make_llm=None, calls=50,
-        selector="tag", decomposer="greedy", live=False):
+        arbiter="cbs", make_llm=None, calls=50, selector="tag", decomposer="greedy",
+        live=False, ordering="off", ordering_repairs=8):
     """One instance under one strategy, as a CSV row.
 
     A fresh Fast Downward planner per row, never one shared across rows:
@@ -132,13 +133,15 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         extra["planner"] = planner
     if arbiter != "cbs":
         extra["solver"] = make_solver(arbiter, make_llm(), calls)
+    if ordering != "off":
+        extra.update(ordering=ordering, max_ordering_repairs=ordering_repairs)
     result = run(inst.grid, inst.pool, inst.task, k, inst.sites,
                  strategy=strategy, max_teams=max_teams, **extra)
     win = result.winner
     # Every team tried costs calls, not just the one that worked.
     spent = (sum((a.stats or {}).get("llm_calls", 0) for a in result.attempts)
              + stats.get("llm_calls", 0))
-    return {
+    row = {
         "instance": inst.name,
         "sealed": ";".join(sorted(inst.sealed)) or "-",
         "scarce": int(inst.scarce),
@@ -156,6 +159,11 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
                       else ""),
         "arbiter": arbiter,
     }
+    if ordering != "off":
+        row["ordering"] = ordering
+        for key in ("ordering_conflicts", "ordering_repairs", "ordering_rounds"):
+            row[key] = sum((a.stats or {}).get(key, 0) for a in result.attempts)
+    return row
 
 
 def summary(rows, strategies):
@@ -212,6 +220,10 @@ def main():
     ap.add_argument("--decomposer", choices=("greedy", "llm"), default="greedy",
                     help="greedy: the free reference split; llm: the model, as the central "
                          "agent, splits the task over the selected team")
+    ap.add_argument("--ordering", choices=("off", "check", "repair"), default="off",
+                    help="check cross-agent task order, or repair it with bounded grid-CBS search")
+    ap.add_argument("--ordering-repairs", type=int, default=8,
+                    help="maximum release constraints added by ordering repair")
     ap.add_argument("--out", default=None)
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
@@ -225,6 +237,11 @@ def main():
     unknown = [s for s in strategies if s not in POLICIES and s != "llm"]
     if unknown:
         raise SystemExit(f"unknown strategy {unknown}; pick from {sorted(POLICIES)}")
+    if a.ordering_repairs < 0:
+        raise SystemExit("--ordering-repairs must be nonnegative")
+    if a.ordering == "repair" and (a.fd or a.domain == "colored" or a.arbiter != "cbs"):
+        raise SystemExit("ordering repair supports only capability-domain grid CBS; "
+                         "use --ordering check for FD, colored, hybrid, or llm")
     if (a.live and a.arbiter == "cbs" and a.selector == "tag"
             and a.decomposer == "greedy"):
         raise SystemExit("--live has nothing to do here: nothing in this run calls a model; "
@@ -244,6 +261,8 @@ def main():
         parts = ["pipeline"]
         if a.domain == "colored":
             parts.append("colored")
+        if a.ordering != "off":
+            parts.append(f"ordering_{a.ordering}")
         if a.fd:
             parts.append("fd")
         if a.arbiter != "cbs":
@@ -265,7 +284,8 @@ def main():
         for strategy in strategies:
             row = one(inst, a.k, strategy, a.max_teams, a.domain, fd=a.fd, search=a.search,
                       arbiter=a.arbiter, make_llm=make_llm, calls=a.calls,
-                      selector=a.selector, decomposer=a.decomposer, live=a.live)
+                      selector=a.selector, decomposer=a.decomposer, live=a.live,
+                      ordering=a.ordering, ordering_repairs=a.ordering_repairs)
             rows.append(row)
             if not a.quiet:
                 end = "solved" if row["solved"] else row["failure"]
@@ -286,7 +306,8 @@ def main():
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
+        fields = FIELDS + (ORDER_FIELDS if a.ordering != "off" else ())
+        writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
 
