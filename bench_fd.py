@@ -122,6 +122,11 @@ def main():
     ap.add_argument("--fakes", action="store_true",
                     help="also run Approaches 2/3 with the $0 fake policies (off by default: they "
                          "triple the Fast Downward calls without telling us anything about the LLM)")
+    ap.add_argument("--conflicts", choices=("vertex", "standard"), default="vertex",
+                    help="how a swap is resolved. vertex forbids each agent the cell it would "
+                         "enter, which is stronger than CBS and can prune the optimum; standard "
+                         "forbids the edge, as Sharon et al. 2015, and keeps the tree complete. "
+                         "Approach 1 alone is free, so this gives a true-optimal reference at no cost")
     ap.add_argument("--a2-calls", type=int, default=20)
     ap.add_argument("--a3-calls", type=int, default=50)
     ap.add_argument("--fd", default="aibasel/downward",
@@ -186,8 +191,9 @@ def main():
 
     # every approach: (label, make LLM or None, function(grid, agents, llm)); planner is injected below.
     approaches = [
-        ("1 CBS best-first [FD]", None,
-         lambda g, ag, llm: solve_best_first(g, ag, horizon=HORIZON, max_nodes=6000, planner=planner)),
+        (f"1 CBS best-first [FD]{' [edge]' if a.conflicts == 'standard' else ''}", None,
+         lambda g, ag, llm: solve_best_first(g, ag, horizon=HORIZON, max_nodes=6000,
+                                             planner=planner, conflicts=a.conflicts)),
     ]
     if a.dfs:
         approaches += [
