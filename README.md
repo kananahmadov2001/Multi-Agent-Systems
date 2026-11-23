@@ -42,7 +42,7 @@ export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per ru
 
 | Command | What it checks |
 |---|---|
-| `python3 verify.py` | The independent plan checker (1 good plan, 7 bad plans rejected) |
+| `python3 verify.py` | The independent plan checker (1 good plan, 7 bad plans rejected), and `verify_order`, which checks task order without sharing code with the detector that drives the repair |
 | `python3 cbs_baseline.py` | Approach 1: CBS, best-first and the depth-first ablation |
 | `python3 test_fd.py` | Approach 1 with Fast Downward as the low-level planner |
 | `python3 test_llm.py` | Approach 2 with fake LLMs |
@@ -56,7 +56,22 @@ export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per ru
 | `python3 colored_box.py` | The colored-box domain, where each agent sees a different grid |
 | `python3 check_fd_route.py` | The generated PDDL against `plan_route`, **without needing Fast Downward**. Add `--adversarial` or `--pipeline` |
 | `python3 control.py` | Approach 3's search with no LLM, on all 60 benchmark instances |
+| `python3 ordering.py` | Cross-agent task order: detection, bounded repair, and the release constraint |
+| `python3 check_edge.py` | Standard edge constraints against our stronger vertex rule |
+| `python3 check_edge_oracle.py` | Both conflict rules against brute force, so "stronger" can be priced |
+| `python3 hard_cbs.py` | Regenerates the hard set by how many nodes best-first CBS itself spends |
 | `python3 bench.py` | All three approaches on the hard cases with fake LLMs (harness only) |
+
+One fuzz test, free, that needs neither Fast Downward nor a key:
+
+```bash
+python3 fuzz_ordering.py --n 60 --sites 1 --oracle
+```
+
+Every instance the order repair gives up on is put to a brute-force joint oracle, which keeps
+"incomplete" and "wrong" distinguishable: 55 of 56 feasible single-pair instances solved, 0
+unsound, 1 suboptimal by one step. `--sites 2` is the harder case, a total order over four
+parts, where the same repair solves only about a third of the feasible instances.
 
 Two diagnostics that need Fast Downward but no key:
 
@@ -71,7 +86,8 @@ python3 check_search.py --fd "$FD"         # does the search configuration chang
 
 ### Arbitration, fixed team (`bench_fd.py`)
 
-60 instances in three sets. Approach 1 only, and free, unless you pass `--live` or `--fakes`.
+60 instances in three sets, plus `hcb`. Approach 1 only, and free, unless you pass `--live`
+or `--fakes`.
 
 ```bash
 python3 bench_fd.py --set sweep --fd "$FD" --out /tmp/check.csv        # free, Approach 1
@@ -79,9 +95,22 @@ python3 bench_fd.py --set hard --fd "$FD" --live --out results/new/hard.csv --lo
 python3 analyze.py results/fd/hard_fd_haiku.csv results/fd/hard_fd_haiku.jsonl   # free: read a finished run
 ```
 
-Options: `--set easy|hard|random|sweep|all`, `--start N`, `--limit N`, `--only NAME[,NAME]`,
-`--repeat R`, `--search CONFIG`, `--a2-calls N`, `--a3-calls N`, `--fd-mode run|exec`.
+Options: `--set easy|hard|hcb|random|sweep|all`, `--conflicts vertex|standard`, `--start N`,
+`--limit N`, `--only NAME[,NAME]`, `--repeat R`, `--search CONFIG`, `--a2-calls N`,
+`--a3-calls N`, `--fakes`, `--fd-mode run|exec`.
 **Always pass `--out`** — the default overwrites a committed file.
+
+`--set hcb` is the hard set regenerated against best-first CBS itself: an instance is kept when
+CBS spends at least 20 expansions on it, rather than when two depth-first rule orders disagree,
+which is what filtered the original hard set. It is opt-in; `--set all` does not include it.
+
+`--conflicts standard` swaps our vertex rule for proper edge constraints, which keeps the tree
+complete. It applies to Approach 1 only — the LLM arbiters always use the default rule — so an
+edge run is a study of the constraint scheme, not of arbitration.
+
+`--fakes` adds the scripted policies to Approaches 2 and 3 at no cost. Use it as a regression
+test, not as a result: the policies are deterministic, so any difference between two runs is the
+code rather than the model.
 
 ### The full pipeline (`pipeline_bench.py`)
 
@@ -96,12 +125,34 @@ python3 pipeline_bench.py --fd "$FD" --k 3 --arbiter llm --live --out results/ne
 ```
 
 Options: `--domain capability|colored`, `--k N`, `--arbiter cbs|hybrid|llm`,
-`--selector tag|llm`, `--decomposer greedy|llm`, `--live`, `--calls N`, `--max-teams N`,
-`--agents N`, `--size N`, `--walls F`, `--search CONFIG`, `--fd DIR`, `--out FILE`.
+`--selector tag|llm`, `--decomposer greedy|llm`, `--ordering off|check|repair`,
+`--ordering-repairs N`, `--live`, `--calls N`, `--max-teams N`, `--agents N`, `--size N`,
+`--walls F`, `--search CONFIG`, `--fd DIR`, `--out FILE`.
+
+`--ordering check` adds cross-agent task order to verification; `--ordering repair` also tries
+to fix violations by delaying the later part. Both are free and deterministic. Ordering sits
+outside the arbiter, so the LLM never sees an ordering conflict even under `--live`.
 
 Without `--live`, an LLM arbiter runs on a scripted fake that always takes the first option —
 which is exactly the no-LLM control, at no cost. **Pass `--out` whenever you change `--k` or
 `--agents`**: the default filename does not encode them, so a sweep will overwrite itself.
+
+### Agent-authored PDDL (`authored_pddl.py`)
+
+The proposal's version of the low-level step: the agent writes its own problem file instead of
+the harness generating it. Needs `--live` and a key; without it the checker runs on a canned
+reply. Results are printed, so redirect them.
+
+```bash
+python3 authored_pddl.py --live --cases 20 > results/authored/single.txt
+python3 authored_pddl.py --live --cases 12 --routes > results/authored/routes.txt
+python3 authored_pddl.py --live --cases 20 --dump /tmp/replies.txt   # read a fault, don't guess it
+```
+
+Options: `--cases N`, `--routes`, `--size N`, `--horizon N`, `--seed N`, `--dump FILE`, and
+`--fd DIR` to also solve each authored problem for real rather than only checking its shape.
+A 5x5 grid at horizon 20 needs roughly 15k output tokens, so raise `ARBITER_MAX_TOKENS` before
+a routes run or the replies are cut off mid-problem.
 
 Create an output folder before writing to it (`mkdir -p results/new`). Ctrl+C is safe:
 finished instances are kept.
@@ -118,15 +169,20 @@ without reference to the search code — accepts it.
 | Approach 3 (LLM-guided CBS) | `hybrid.py`, `test_hybrid.py` |
 | Pipeline stages 1–2 | `agent_pool.py`, `selection.py`, `llm_select.py`, `decompose.py` |
 | Pipeline loop and domains | `pipeline.py`, `pipeline_instances.py`, `colored_box.py` |
+| Ordering conflicts | `ordering.py`, `verify.py` (`verify_order`), `fuzz_ordering.py` |
 | Evaluation | `instances.py`, `verify.py`, `bench.py`, `bench_fd.py`, `pipeline_bench.py`, `analyze.py`, `control.py` |
-| Diagnostics | `probe_e2e.py`, `check_fd_route.py`, `check_search.py` |
+| Diagnostics | `probe_e2e.py`, `check_fd_route.py`, `check_search.py`, `check_edge.py`, `check_edge_oracle.py`, `fuzz_ordering.py` |
+| Instance generation | `instances.py`, `hard_cbs.py` (the `hcb` set), `pipeline_instances.py` |
+| Agent-authored PDDL | `authored_pddl.py` |
 
 ## Results folder
 
 | Folder | What it holds |
 |---|---|
-| `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `hard_fd_haiku`, `random_fd_haiku`, `sweep_fd_haiku`, `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search). |
-| `results/pipeline/` | Pipeline runs. `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_colored`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). |
+| `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `*_fd_haiku` (the headline runs on all three sets), `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search), `*_fd_equal20` and `*_fd_equal50` (both LLM approaches at the same call cap), `*_fd_edge` (`--conflicts standard`, Approach 1 only), and `hcb_fd_cbs` / `hcb_fd_equal50` / `hcb_fd_edge` (the CBS-regenerated hard set). |
+| `results/pipeline/` | Pipeline runs. `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_fd_llmselect` and `pipeline_fd_llmdecomp` (an LLM in place of the selection and decomposition heuristics), `pipeline_colored*`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). |
+| `results/ordering/` | `pipeline_order_check` and `pipeline_order_repair`: cross-agent task order on the pipeline. Read against `results/pipeline/pipeline_results.csv` (44/60), which is the same configuration with ordering off. |
+| `results/authored/` | `single`, `single_summary`, `routes`: `.txt`, not `.csv`. What the model produced when asked to write its own PDDL problem file. |
 | `results/haiku/` | Earlier arbitration runs on our own grid planner, kept so the PDDL numbers can be compared against them. |
 | `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap. |
 | `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. |
@@ -138,17 +194,41 @@ every prompt and reply. Do not mix models in one table.
 
 ## Known differences from the proposal
 
-- **PDDL is compiled, not authored.** The proposal says each agent *writes* its PDDL under a
-  vocabulary the central agent fixes. Each agent *solves* its own PDDL, but the problem file is
-  generated by the harness from a fixed two-action domain. An LLM selector and decomposer are
-  implemented (`--selector llm`, `--decomposer llm`); an LLM that writes PDDL is not.
-- **Conflicts are contested cells only.** We did not grow conflict detection to resource and
-  ordering conflicts.
-- **Our swap constraint is stronger than standard CBS.** A swap forbids each agent's destination
-  cell rather than the edge, so the tree is incomplete and Approach 1's optimality is relative to
-  our constraint scheme, not to the instance.
+- **PDDL is compiled by default, and authoring was measured rather than skipped.** The proposal
+  says each agent *writes* its PDDL under a vocabulary the central agent fixes. By default the
+  problem file is generated by the harness from a fixed two-action domain and each agent solves
+  its own. `authored_pddl.py` tests the proposal's version directly, and the result is why we
+  did not build on it: asked to write the problem file itself, the model stays inside the fixed
+  vocabulary on 18–19 of 20 single-goal cases but produces an exactly correct problem on only
+  4–5 of 20, and on 0 of 12 ordered-route cases. An LLM selector and decomposer are implemented
+  and measured (`--selector llm`, `--decomposer llm`).
+- **Ordering conflicts are implemented; shared resources are not.** Conflict detection covers
+  contested cells and cross-agent task order (`ordering.py`): a requirement that one part be
+  served before another, which each agent's plan can satisfy alone and the pair can violate
+  together. Repair delays the later part and is deliberately incomplete — it never hurries the
+  earlier one — and reports that a give-up is not a proof of infeasibility. Shared consumable
+  resources are still not modelled.
+- **The default swap constraint is stronger than standard CBS, and the standard rule is
+  available.** By default a swap forbids each agent's destination cell rather than the edge, so
+  the tree is incomplete and Approach 1's optimality is relative to our constraint scheme.
+  `--conflicts standard` uses proper edge constraints; `check_edge_oracle.py` confirms those
+  optimal against brute force on 803 cases. The gap is small but real: the vertex rule is one
+  step off the optimum on 21 of 65 brute-forced cases, about 1.3% total slack across 57
+  benchmark instances, and pocket-3's true optimum is 7, not the 8 the midterm reported. Edge
+  constraints solve 57 of 60 where the vertex rule solves 58, because a complete tree is a
+  bigger tree.
 - **Approach 3 stops at the first conflict-free plan it generates**, so its plans are not
   guaranteed cheapest.
+- **The midterm's solve-count gap between Approaches 2 and 3 was budget, not judgement.** It
+  compared Approach 2 at 20 calls with Approach 3 at 50. At matched caps the gap is one instance
+  either way: 48 vs 49 at 20 calls, 51 vs 52 at 50, inside Approach 2's own run-to-run variance.
+  Plan quality still separates them — on the hard set at 50 calls, 20.5 steps against 14.2 — so
+  the claim that survives is about cost per conflict, not about solving more.
+- **Which LLM approach wins depends on the instance set.** On the `hcb` set, regenerated against
+  best-first CBS itself, the ordering reverses: Approach 2 solves 17 of 20 and Approach 3 solves
+  15, because Approach 3 pays one call per node expansion while Approach 2 pays one per conflict,
+  and these instances need many expansions. Any claim that one arbiter beats the other should
+  name the set it was measured on.
 - **The satisficing claim is retracted.** The midterm said optimality is conditional on the
   low-level planner, holding for `astar(lmcut())` but not for a satisficing configuration. It is
   not: `check_search.py` finds identical plans, not merely identical costs, on all 38 of 40
