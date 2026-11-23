@@ -30,6 +30,7 @@ import argparse, json, os, subprocess, time
 from cbs_baseline import solve, solve_best_first
 from llm_arbitrator import FakeLLM, AnthropicLLM, solve_llm
 from hybrid import solve_hybrid, solve_hybrid_dfs
+from hard_cbs import hard_by_search
 from instances import gadgets, random_hard, random_plain, sweep
 from verify import verify
 import fd_planner
@@ -111,7 +112,12 @@ def make_fd_planner_exec(container, host_dir, container_dir, search):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", action="store_true")
-    ap.add_argument("--set", default="hard", choices=["easy", "hard", "random", "sweep", "all"])
+    ap.add_argument("--set", default="hard",
+                    choices=["easy", "hard", "hcb", "random", "sweep", "all"],
+                    help="hcb is the hard set regenerated against best-first CBS itself: kept "
+                         "when CBS spends at least 20 expansions, rather than when two "
+                         "depth-first rule orders disagree, which is what filtered the "
+                         "original hard set")
     ap.add_argument("--start", type=int, default=0)
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--only", default=None)
@@ -146,6 +152,10 @@ def main():
     inst = []
     if a.set in ("hard", "all"):
         inst += gadgets() + random_hard(20, 11)
+    if a.set == "hcb":
+        # Opt-in only: "all" has never meant every set, and quietly widening it
+        # would change what an existing command produces.
+        inst += hard_by_search(20, seed=41, min_nodes=20)
     if a.set in ("easy", "all"):
         inst += easy_instances()
     if a.set == "random":
