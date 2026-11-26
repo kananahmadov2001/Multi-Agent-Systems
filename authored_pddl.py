@@ -211,6 +211,124 @@ def size_table():
     print("  Our benchmark instances are 5x5 at horizon 20, the last row.")
 
 
+REPAIR = """Your previous attempt was rejected. Fix it and return the corrected problem file.
+
+WHAT WAS WRONG
+{fault}
+
+WHAT YOU WROTE
+{reply}
+
+THE ORIGINAL TASK, UNCHANGED
+{prompt}
+
+Output only the corrected problem file, starting with "(define (problem" and ending
+with the matching ")". No commentary, no code fences."""
+
+
+def make_authored_planner(fd_dir, llm, base, search="astar(lmcut())", stats=None,
+                          strict=True, attempts=1):
+    """A planner that asks the agent to write its own PDDL, as the proposal says.
+
+    Same signature as every other planner, so run_pipeline cannot tell the
+    difference: (grid, start, goal, constraints, horizon).
+
+    The authoring prompt has no way to express an arbitration constraint -- it
+    describes a grid, a start and a route, and nothing else -- so a call that
+    arrives carrying constraints falls through to `base`, the compiled encoding.
+    That is the honest division of the question. Stage 3 asks whether an agent
+    can state its own problem; restating it under forty accumulated constraints
+    is a different and much harder question, and one the measured authoring
+    accuracy says is not worth the API spend.
+
+    strict=True is the proposal's reading: an agent that cannot write a usable
+    problem has no plan, and the arbiter treats that as it treats any other
+    agent with no plan. strict=False falls back to the compiled encoding and
+    only records what authoring would have done, which measures quality without
+    letting a bad problem decide the run.
+
+    attempts > 1 re-asks with the fault fed back, the repair loop Smirnov et al.
+    describe. One shot is the harsher reading and the cheaper one; saying which
+    was used matters, because "cannot write it" and "cannot write it even when
+    told what broke" are different claims.
+    """
+    seen = {} if stats is None else stats.setdefault("authored", {})
+    for key in ("calls", "ok", "malformed", "unsolvable", "illegal",
+                "fallback_constrained", "ok_first", "ok_repair", "problems"):
+        seen.setdefault(key, 0)
+
+    def plan(grid, start, goal, constraints, horizon):
+        if constraints:
+            seen["fallback_constrained"] += 1
+            return base(grid, start, goal, constraints, horizon)
+
+        route = as_route(goal)
+        first = prompt_for(grid, start, route, horizon)
+        seen["problems"] += 1
+        reply = fault = None
+
+        for attempt in range(1, attempts + 1):
+            seen["calls"] += 1
+            ask = first if attempt == 1 else REPAIR.format(fault=fault, reply=reply,
+                                                           prompt=first)
+            problem = fence_strip(llm(ask))
+
+            faults = structural(problem)
+            if faults:
+                seen["malformed"] += 1
+                reply, fault = problem, "; ".join(faults)
+                continue
+
+            path = solve_with_fd(fd_dir, problem, search)
+            if path is None or path == "ERROR":
+                seen["unsolvable"] += 1
+                reply = problem
+                fault = ("Fast Downward found no plan for this problem, so some fact "
+                         "it needs is missing or wrong.")
+                continue
+
+            # solve_with_fd returns the destination of each move, so the start cell
+            # is not in it; main() prepends it for the same reason. Every planner in
+            # this repo returns a path that begins at the start, and the arbiter
+            # costs a plan as len(path) - 1, so it has to be prepended here too.
+            path = [start] + path
+            why = legal_on_grid(path, grid, start, route)
+            if why:
+                seen["illegal"] += 1
+                reply = problem
+                fault = (f"the problem is well formed and solvable, but the plan it "
+                         f"admits is wrong on the real grid: {why}")
+                continue
+
+            seen["ok"] += 1
+            seen["ok_first" if attempt == 1 else "ok_repair"] += 1
+            return path
+
+        return None if strict else base(grid, start, goal, constraints, horizon)
+
+    return _Authored(plan, base, seen)
+
+
+class _Authored:
+    """Callable planner that still reports `calls` the way make_fd_planner does.
+
+    The bench reads planner.calls for its fd_calls column, so a planner that is
+    only a function breaks it. Fast Downward runs here in two places -- once per
+    authored problem, and once per constrained call that falls through to the
+    compiled planner -- and both belong in that count.
+    """
+
+    def __init__(self, plan, base, seen):
+        self._plan, self._base, self._seen = plan, base, seen
+
+    def __call__(self, *args):
+        return self._plan(*args)
+
+    @property
+    def calls(self):
+        return self._seen["calls"] + getattr(self._base, "calls", 0)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", action="store_true", help="ask the real model")

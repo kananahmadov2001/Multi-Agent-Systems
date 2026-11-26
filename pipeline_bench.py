@@ -30,6 +30,9 @@ DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
 FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "teams_tried",
           "team", "team_cost", "steps", "nodes", "fd_calls", "llm_calls", "arbiter")
 ORDER_FIELDS = ("ordering", "ordering_conflicts", "ordering_repairs", "ordering_rounds")
+AUTHORED_FIELDS = ("authored_problems", "authored_calls", "authored_ok",
+                   "authored_ok_first", "authored_ok_repair", "authored_malformed",
+                   "authored_unsolvable", "authored_illegal", "authored_compiled")
 OUTCOMES = ("solved", "selection", "decomposition", "arbitration", "verification")
 
 
@@ -92,6 +95,32 @@ def llm_decomposer(llm, grid, stats):
                                                    grid=grid, stats=stats)
 
 
+def canned_author():
+    """An offline stand-in that writes the problem the compiler would write.
+
+    It proves the adapter's plumbing -- prompt in, problem text out, Fast
+    Downward, replay on the real grid -- without spending anything. It says
+    nothing about whether a model can do the same, which is what --live is for.
+    """
+    from fd_planner import as_route, make_problem, make_route_problem
+
+    def author(prompt):
+        import re as _re
+        grid_rows = _re.findall(r"^[.#]+$", prompt, _re.M)
+        start = tuple(int(x) for x in _re.search(r"start.*?\((\d+),\s*(\d+)\)",
+                                                 prompt, _re.I | _re.S).groups())
+        horizon = int(_re.search(r"horizon[^0-9]*(\d+)", prompt, _re.I).group(1))
+        cells = [tuple(int(x) for x in m)
+                 for m in _re.findall(r"\((\d+),\s*(\d+)\)", prompt)]
+        route = as_route([c for c in cells[1:]] or [start])
+        from cbs_baseline import Grid
+        g = Grid(grid_rows)
+        return (make_problem(g, start, route[0], frozenset(), horizon) if len(route) == 1
+                else make_route_problem(g, start, route, frozenset(), horizon)) or ""
+
+    return author
+
+
 def make_solver(arbiter, llm, calls):
     """The pipeline's solver for one of the three arbitration approaches.
 
@@ -110,7 +139,8 @@ def make_solver(arbiter, llm, calls):
 
 def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         arbiter="cbs", make_llm=None, calls=50, selector="tag", decomposer="greedy",
-        live=False, ordering="off", ordering_repairs=8):
+        live=False, ordering="off", ordering_repairs=8, authored=False,
+        authored_strict=True, horizon=None, authored_attempts=1):
     """One instance under one strategy, as a CSV row.
 
     A fresh Fast Downward planner per row, never one shared across rows:
@@ -130,11 +160,22 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
     if fd:
         from fd_planner import make_fd_planner
         planner = make_fd_planner(fd, search) if search else make_fd_planner(fd)
+        if authored:
+            # stage 3 as the proposal writes it: the agent authors the problem
+            # file, Fast Downward solves it. The compiled planner stays as the
+            # fallback for constrained replans, which the prompt cannot express.
+            from authored_pddl import make_authored_planner
+            planner = make_authored_planner(fd, AnthropicLLM() if live else canned_author(),
+                                            planner, search=search or "astar(lmcut())",
+                                            stats=stats, strict=authored_strict,
+                                            attempts=authored_attempts)
         extra["planner"] = planner
     if arbiter != "cbs":
         extra["solver"] = make_solver(arbiter, make_llm(), calls)
     if ordering != "off":
         extra.update(ordering=ordering, max_ordering_repairs=ordering_repairs)
+    if horizon:
+        extra["horizon"] = horizon
     result = run(inst.grid, inst.pool, inst.task, k, inst.sites,
                  strategy=strategy, max_teams=max_teams, **extra)
     win = result.winner
@@ -154,11 +195,21 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         "steps": sum(len(p) - 1 for p in win.paths.values()) if win else "",
         # Approach 2 has no tree, so it reports no node count.
         "nodes": win.stats.get("nodes", "") if win else "",
-        "fd_calls": planner.calls if planner else "",
+        "fd_calls": getattr(planner, "calls", "") if planner else "",
         "llm_calls": (spent if (arbiter != "cbs" or selector == "llm" or decomposer == "llm")
                       else ""),
         "arbiter": arbiter,
     }
+    if authored:
+        wrote = stats.get("authored", {})
+        row.update(authored_problems=wrote.get("problems", 0),
+                   authored_calls=wrote.get("calls", 0), authored_ok=wrote.get("ok", 0),
+                   authored_ok_first=wrote.get("ok_first", 0),
+                   authored_ok_repair=wrote.get("ok_repair", 0),
+                   authored_malformed=wrote.get("malformed", 0),
+                   authored_unsolvable=wrote.get("unsolvable", 0),
+                   authored_illegal=wrote.get("illegal", 0),
+                   authored_compiled=wrote.get("fallback_constrained", 0))
     if ordering != "off":
         row["ordering"] = ordering
         for key in ("ordering_conflicts", "ordering_repairs", "ordering_rounds"):
@@ -191,6 +242,9 @@ def main():
     ap.add_argument("--max-teams", type=int, default=3, help="candidate teams tried per instance")
     ap.add_argument("--strategies", default="cheapest,greedy,coverage")
     ap.add_argument("--size", type=int, default=5)
+    ap.add_argument("--horizon", type=int, default=None,
+                    help="plan horizon. The time-expanded encoding grows with it, so a "
+                         "smaller horizon is what makes --authored feasible at all")
     ap.add_argument("--agents", type=int, default=6)
     ap.add_argument("--tags", type=int, default=3,
                     help="more tags than k, so a team needs a generalist and the policies differ")
@@ -206,6 +260,15 @@ def main():
                     help="Fast Downward search configuration, default astar(lmcut()). "
                          "A satisficing configuration costs optimality, which is the point "
                          "of passing one")
+    ap.add_argument("--authored", action="store_true",
+                    help="stage 3 as proposed: each agent writes its own PDDL problem "
+                         "file, which Fast Downward then solves. Needs --fd.")
+    ap.add_argument("--authored-attempts", type=int, default=1,
+                    help="with --authored, re-ask this many times with the fault fed "
+                         "back. 1 is one shot; 3 is the repair loop Smirnov et al. use")
+    ap.add_argument("--authored-lenient", action="store_true",
+                    help="with --authored, fall back to the compiled problem when "
+                         "authoring fails, instead of treating it as no plan")
     ap.add_argument("--arbiter", choices=("cbs", "hybrid", "llm"), default="cbs",
                     help="who resolves conflicts: cbs is Approach 1 and free, hybrid is "
                          "Approach 3 (LLM-guided CBS), llm is Approach 2 (no tree)")
@@ -239,13 +302,20 @@ def main():
         raise SystemExit(f"unknown strategy {unknown}; pick from {sorted(POLICIES)}")
     if a.ordering_repairs < 0:
         raise SystemExit("--ordering-repairs must be nonnegative")
-    if a.ordering == "repair" and (a.fd or a.domain == "colored" or a.arbiter != "cbs"):
-        raise SystemExit("ordering repair supports only capability-domain grid CBS; "
-                         "use --ordering check for FD, colored, hybrid, or llm")
+    if a.authored and not a.fd:
+        raise SystemExit("--authored needs --fd: the agent writes the problem file, "
+                         "Fast Downward solves it")
+    if a.authored_lenient and not a.authored:
+        raise SystemExit("--authored-lenient only means something with --authored")
+    if a.authored_attempts < 1:
+        raise SystemExit("--authored-attempts must be at least 1")
+    if a.authored_attempts > 1 and not a.authored:
+        raise SystemExit("--authored-attempts only means something with --authored")
     if (a.live and a.arbiter == "cbs" and a.selector == "tag"
-            and a.decomposer == "greedy"):
+            and a.decomposer == "greedy" and not a.authored):
         raise SystemExit("--live has nothing to do here: nothing in this run calls a model; "
-                         "pass --arbiter hybrid/llm, or --selector llm / --decomposer llm")
+                         "pass --arbiter hybrid/llm, --selector llm, --decomposer llm, "
+                         "or --authored")
 
     model = os.environ.get("ARBITER_MODEL", "claude-sonnet-5-5") if a.live else "fake"
     make_llm = ((lambda: AnthropicLLM()) if a.live
@@ -283,6 +353,8 @@ def main():
     for inst in insts:
         for strategy in strategies:
             row = one(inst, a.k, strategy, a.max_teams, a.domain, fd=a.fd, search=a.search,
+                      authored=a.authored, authored_strict=not a.authored_lenient,
+                      horizon=a.horizon, authored_attempts=a.authored_attempts,
                       arbiter=a.arbiter, make_llm=make_llm, calls=a.calls,
                       selector=a.selector, decomposer=a.decomposer, live=a.live,
                       ordering=a.ordering, ordering_repairs=a.ordering_repairs)
@@ -306,7 +378,8 @@ def main():
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", newline="", encoding="utf-8") as f:
-        fields = FIELDS + (ORDER_FIELDS if a.ordering != "off" else ())
+        fields = (FIELDS + (ORDER_FIELDS if a.ordering != "off" else ())
+                  + (AUTHORED_FIELDS if a.authored else ()))
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)

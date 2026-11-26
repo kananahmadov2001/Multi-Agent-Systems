@@ -29,7 +29,10 @@ class AnthropicLLM:
 
     def __init__(self, model=None):
         import anthropic
-        self.client = anthropic.Anthropic()
+        # A big authored problem streams for minutes; the default read timeout
+        # cuts it off mid-reply and the tokens are billed either way.
+        self.client = anthropic.Anthropic(
+            timeout=float(os.environ.get("ARBITER_TIMEOUT", "1800")))
         self.model = model or os.environ.get("ARBITER_MODEL", "claude-sonnet-5-5")
         self.log = []
 
@@ -38,9 +41,20 @@ class AnthropicLLM:
             raise RuntimeError(f"Stopped: reached the cap of {AnthropicLLM.max_total_calls} API calls "
                                "(raise it with: export ARBITER_MAX_CALLS=500)")
         AnthropicLLM.total_calls += 1
-        r = self.client.messages.create(
-            model=self.model, max_tokens=int(os.environ.get("ARBITER_MAX_TOKENS", "4000")),   # the model thinks first; 1500 cut replies off
-            messages=[{"role": "user", "content": prompt}])
+        args = dict(model=self.model,
+                    max_tokens=int(os.environ.get("ARBITER_MAX_TOKENS", "4000")),   # the model thinks first; 1500 cut replies off
+                    messages=[{"role": "user", "content": prompt}])
+        try:
+            r = self.client.messages.create(**args)
+        except ValueError as e:
+            # A large max_tokens means the reply could take over ten minutes, and
+            # the SDK refuses those without streaming. Authored PDDL needs tens of
+            # thousands of output tokens, so stream instead; the final message has
+            # the same shape, and every smaller call still takes the path above.
+            if "treaming" not in str(e):
+                raise
+            with self.client.messages.stream(**args) as s:
+                r = s.get_final_message()
         # The reply can start with a thinking block; keep only the text blocks.
         text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
         AnthropicLLM.tokens_in += r.usage.input_tokens

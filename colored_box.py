@@ -114,7 +114,9 @@ def run_colored(cgrid, pool, task, k, sites, strategy="cheapest", max_teams=3,
     differ, so the hybrid and llm arbiters work here too - they take a planner.
     """
     def solve(grid, agents, **opts):
-        opts["planner"] = planner_for(cgrid, agents, planner)
+        # compose, do not replace: ordering repair hands down a planner that adds
+        # release constraints, and overwriting it here would drop them silently
+        opts["planner"] = planner_for(cgrid, agents, opts.get("planner") or planner)
         return solver(grid, agents, **opts)
 
     return run_pipeline(cgrid, pool, task, k, sites, strategy=strategy, horizon=horizon,

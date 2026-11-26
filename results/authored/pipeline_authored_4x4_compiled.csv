@@ -1,0 +1,7 @@
+instance,sealed,scarce,strategy,solved,failure,teams_tried,team,team_cost,steps,nodes,fd_calls,llm_calls,arbiter,authored_calls,authored_ok,authored_malformed,authored_unsolvable,authored_illegal,authored_compiled
+co1,-,0,cheapest,1,,1,a2;a6,3.8,14,2,4,,cbs,2,2,0,0,0,2
+co2,-,1,cheapest,0,selection,1,,,,,0,,cbs,0,0,0,0,0,0
+co3,-,0,cheapest,1,,1,a4;a6,4.3,8,6,11,,cbs,2,2,0,0,0,10
+co4,-,0,cheapest,1,,1,a4;a5,3.6,5,1,2,,cbs,2,2,0,0,0,0
+co5,-,0,cheapest,1,,1,a5;a6,3.9,7,2,4,,cbs,2,2,0,0,0,2
+co6,-,0,cheapest,1,,1,a1;a2,3.8,7,1,2,,cbs,2,2,0,0,0,0

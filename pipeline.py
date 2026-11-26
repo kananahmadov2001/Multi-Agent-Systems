@@ -100,7 +100,7 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
     `precheck(team, goals)` returns a reason string when the split is impossible
     before the solver runs (the coloured domain uses it for unseen waypoints).
     ordering="check" rejects cross-agent order violations; "repair" additionally
-    runs bounded heuristic repair, supported only by the built-in grid CBS solver.
+    runs bounded heuristic repair, on either low-level planner and any arbiter.
     """
     if max_teams < 1:
         raise ValueError("max_teams must be at least 1")
@@ -143,11 +143,11 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
         members = {a.name: a for a in team}
         mapf = {n: (members[n].start, g) for n, g in goals.items()}
         if ordering == "repair":
-            if solver is not solve_best_first or planner is not plan_single:
-                attempts.append(Attempt(names, "arbitration",
-                                        "ordering repair requires the built-in grid CBS solver",
-                                        goals=goals, assignment=assignment))
-                continue
+            # Any planner that honours ("release", index, time) works here, which
+            # since fd_planner gained release support means both of ours. A planner
+            # that ignored one could not slip a bad plan through either: the repair
+            # loop only returns a plan verify_order accepts, so dropped releases
+            # surface as "could not repair", never as an unordered answer.
             paths, stats = solve_ordered(grid, mapf, task, assignment, solver=solver,
                                          planner=planner, checker=checker, horizon=horizon,
                                          max_nodes=max_nodes, max_repairs=max_ordering_repairs)
@@ -282,9 +282,30 @@ def main():
                          ordering="repair")
     assert fixed.ok and fixed.stats["ordering_repairs"] == 1, fixed.attempts
     assert fixed.stats["ordering_rounds"] == 2
-    unsupported = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
-                               solver=lambda *args, **kwargs: (None, {}), ordering="repair")
-    assert not unsupported.ok and "requires" in unsupported.attempts[0].detail
+    # repair is no longer tied to one planner: a planner that honours releases
+    # works whoever supplies it, so wrapping the default must change nothing
+    def passthrough(grid, start, goal, constraints, horizon):
+        return plan_single(grid, start, goal, constraints, horizon)
+
+    wrapped = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
+                           planner=passthrough, ordering="repair")
+    assert wrapped.ok and wrapped.stats["ordering_repairs"] == 1, wrapped.attempts
+    assert wrapped.stats["ordering_rounds"] == fixed.stats["ordering_rounds"]
+
+    # a planner that quietly drops releases must not yield an unordered plan: the
+    # repair loop can only return what verify_order accepts, so it reports failure
+    def drops_releases(grid, start, goal, constraints, horizon):
+        kept = frozenset(c for c in constraints if not (len(c) == 3 and c[0] == "release"))
+        return plan_single(grid, start, goal, kept, horizon)
+
+    dropped = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
+                           planner=drops_releases, ordering="repair")
+    assert not dropped.ok, "a planner that ignores releases must not appear to succeed"
+
+    # a solver that returns nothing is an arbitration failure, not a crash
+    none_solver = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
+                               solver=lambda *a, **kw: (None, {}), ordering="repair")
+    assert not none_solver.ok and none_solver.failure == "arbitration"
 
     print("\nall checks passed")
 
