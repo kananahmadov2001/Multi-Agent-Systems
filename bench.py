@@ -164,7 +164,10 @@ def main():
     labels = [x[0] for x in approaches]
 
     rows, stopped = [], None
-    logf = open(a.log, "a") if (a.log and a.live) else None
+    # "w", not "a": the CSV is overwritten each run, so a log opened in append
+    # mode drifts out of step with it. An interrupted run that is then restarted
+    # used to leave its transcripts behind, and analyze.py counted them twice.
+    logf = open(a.log, "w") if (a.log and a.live) else None
     try:
         for iname, grid, agents in inst:
             for label, mk, fn in approaches:

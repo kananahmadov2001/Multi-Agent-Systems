@@ -232,7 +232,7 @@ def main():
 
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     rows, stopped, total_fd = [], None, 0
-    logf = open(a.log, "a") if (a.log and a.live) else None
+    logf = open(a.log, "w") if (a.log and a.live) else None
     try:
         for iname, grid, agents in inst:
             for label, mk, fn in approaches:
