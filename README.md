@@ -126,12 +126,27 @@ python3 pipeline_bench.py --fd "$FD" --k 3 --arbiter llm --live --out results/ne
 
 Options: `--domain capability|colored`, `--k N`, `--arbiter cbs|hybrid|llm`,
 `--selector tag|llm`, `--decomposer greedy|llm`, `--ordering off|check|repair`,
-`--ordering-repairs N`, `--live`, `--calls N`, `--max-teams N`, `--agents N`, `--size N`,
-`--walls F`, `--search CONFIG`, `--fd DIR`, `--out FILE`.
+`--ordering-repairs N`, `--authored`, `--authored-attempts N`, `--authored-lenient`,
+`--live`, `--calls N`, `--max-teams N`, `--agents N`, `--size N`, `--walls F`,
+`--horizon N`, `--search CONFIG`, `--fd DIR`, `--out FILE`.
 
 `--ordering check` adds cross-agent task order to verification; `--ordering repair` also tries
-to fix violations by delaying the later part. Both are free and deterministic. Ordering sits
-outside the arbiter, so the LLM never sees an ordering conflict even under `--live`.
+to fix violations by delaying the later part. Both are free and deterministic, and both work
+on either low-level planner and with any arbiter. Ordering sits outside the arbiter, so the
+LLM never sees an ordering conflict even under `--live`.
+
+`--authored` replaces the compiled problem file with one the agent writes itself: stage 3 as
+the proposal describes it. It needs `--fd`, since Fast Downward solves whatever the agent
+produces. Without `--live` a scripted author stands in, which costs nothing and establishes
+the ceiling for a given configuration. `--authored-attempts N` re-asks up to N times with the
+fault fed back, the repair loop of Smirnov et al.; the default of 1 is one shot.
+`--authored-lenient` falls back to the compiled problem when authoring fails, which measures
+authoring quality without letting a bad problem decide the run.
+
+`--horizon N` matters for `--authored`: the time-expanded encoding grows with it, and at the
+default 5x5 horizon 20 a two-site route problem is about 51k output tokens, beyond what a
+model will emit reliably. 4x4 with horizon 12 is about 18k and is where the authored runs
+below were done.
 
 Without `--live`, an LLM arbiter runs on a scripted fake that always takes the first option —
 which is exactly the no-LLM control, at no cost. **Pass `--out` whenever you change `--k` or
@@ -153,6 +168,21 @@ Options: `--cases N`, `--routes`, `--size N`, `--horizon N`, `--seed N`, `--dump
 `--fd DIR` to also solve each authored problem for real rather than only checking its shape.
 A 5x5 grid at horizon 20 needs roughly 15k output tokens, so raise `ARBITER_MAX_TOKENS` before
 a routes run or the replies are cut off mid-problem.
+
+This measures one problem at a time. To run the same thing inside the pipeline, where two
+agents must both succeed before arbitration can start, use `pipeline_bench.py --authored`:
+
+```bash
+python3 pipeline_bench.py --authored --fd "$FD" --n 6 --strategies cheapest \
+  --size 4 --horizon 12 --walls 0.15 --out /tmp/ceiling.csv
+
+export ARBITER_MAX_TOKENS=32000
+python3 pipeline_bench.py --authored --live --authored-attempts 2 --fd "$FD" --n 6 \
+  --strategies cheapest --size 4 --horizon 12 --walls 0.15 --out /tmp/authored.csv
+```
+
+Run the first one first. It uses the scripted author, costs nothing, and tells you what the
+configuration scores with a perfect stage 3; without it the live number cannot be read.
 
 Create an output folder before writing to it (`mkdir -p results/new`). Ctrl+C is safe:
 finished instances are kept.
@@ -181,8 +211,8 @@ without reference to the search code — accepts it.
 |---|---|
 | `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `*_fd_haiku` (the headline runs on all three sets), `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search), `*_fd_equal20` and `*_fd_equal50` (both LLM approaches at the same call cap), `*_fd_edge` (`--conflicts standard`, Approach 1 only), and `hcb_fd_cbs` / `hcb_fd_equal50` / `hcb_fd_edge` (the CBS-regenerated hard set). |
 | `results/pipeline/` | Pipeline runs. `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_fd_llmselect` and `pipeline_fd_llmdecomp` (an LLM in place of the selection and decomposition heuristics), `pipeline_colored*`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). |
-| `results/ordering/` | `pipeline_order_check` and `pipeline_order_repair`: cross-agent task order on the pipeline. Read against `results/pipeline/pipeline_results.csv` (44/60), which is the same configuration with ordering off. |
-| `results/authored/` | `single`, `single_summary`, `routes`: `.txt`, not `.csv`. What the model produced when asked to write its own PDDL problem file. |
+| `results/ordering/` | `pipeline_order_check` and `pipeline_order_repair` (grid planner) and `pipeline_order_repair_fd` (Fast Downward). Read against `results/pipeline/pipeline_results.csv` (44/60), the same configuration with ordering off. |
+| `results/authored/` | `single`, `single_summary`, `routes` are `.txt`: one problem at a time, standalone. `pipeline_authored_4x4*.csv` are the in-pipeline runs at 4x4 horizon 12 -- `_compiled` is the scripted-author ceiling, the other two are one shot and one repair round. |
 | `results/haiku/` | Earlier arbitration runs on our own grid planner, kept so the PDDL numbers can be compared against them. |
 | `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap. |
 | `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. |
@@ -194,20 +224,41 @@ every prompt and reply. Do not mix models in one table.
 
 ## Known differences from the proposal
 
-- **PDDL is compiled by default, and authoring was measured rather than skipped.** The proposal
-  says each agent *writes* its PDDL under a vocabulary the central agent fixes. By default the
-  problem file is generated by the harness from a fixed two-action domain and each agent solves
-  its own. `authored_pddl.py` tests the proposal's version directly, and the result is why we
-  did not build on it: asked to write the problem file itself, the model stays inside the fixed
-  vocabulary on 18–19 of 20 single-goal cases but produces an exactly correct problem on only
-  4–5 of 20, and on 0 of 12 ordered-route cases. An LLM selector and decomposer are implemented
-  and measured (`--selector llm`, `--decomposer llm`).
+- **PDDL is compiled by default, and authoring was measured end to end rather than skipped.**
+  The proposal says each agent *writes* its PDDL under a vocabulary the central agent fixes. By
+  default the problem file is generated by the harness from a fixed two-action domain and each
+  agent solves its own. Both halves of the proposal's version were tested. One problem at a
+  time (`authored_pddl.py`), the model stays inside the fixed vocabulary on 18–19 of 20
+  single-goal cases but writes an exactly correct problem on only 4–5 of 20, and 0 of 12
+  ordered-route cases. Inside the pipeline (`--authored`), at the benchmark size of 5x5 and
+  horizon 20 the architecture does not run at all: a two-site route problem is about 51k output
+  tokens and the attempt timed out mid-generation. At 4x4 and horizon 12, where a route problem
+  is about 18k, the scripted-author ceiling is 5 of 6 and the model scores 0 of 6 one shot and
+  2 of 6 with one repair round; per problem it goes from 17% to 45% once the fault is fed back.
+  Of 20 live calls, 13 produced something that did not parse and none produced a problem Fast
+  Downward could not solve, so the failure is in writing the file rather than in writing an
+  impossible one. An LLM selector and decomposer are implemented and measured as well
+  (`--selector llm`, `--decomposer llm`).
+- **A verified plan is not a good plan.** One authored problem passed every check we have -- it
+  parsed, Fast Downward solved it, and the plan replayed legally on the real grid -- and took 15
+  steps where the optimum is 7. The problem was well formed and described the wrong world, and
+  nothing downstream can tell. `verify.py` rejects illegal plans, not bad ones, so Approach 1's
+  optimality is only ever relative to the problems the agents hand it. This is the strongest
+  argument in our results for keeping a compiler in stage 3.
 - **Ordering conflicts are implemented; shared resources are not.** Conflict detection covers
   contested cells and cross-agent task order (`ordering.py`): a requirement that one part be
   served before another, which each agent's plan can satisfy alone and the pair can violate
   together. Repair delays the later part and is deliberately incomplete — it never hurries the
   earlier one — and reports that a give-up is not a proof of infeasibility. Shared consumable
-  resources are still not modelled.
+  resources, the "tool" of the proposal's conflict-detection paragraph, are still not modelled:
+  every conflict we detect is spatial or temporal.
+- **Planner independence survives detection but not repair.** Our grid planner and Fast Downward
+  agree exactly on all 60 pipeline rows with ordering off (44/60), and exactly again with order
+  checking on (21/60, the same eight failing instances). Under `--ordering repair` they diverge,
+  39 against 42. Nothing is wrong with either: the repair heuristic is path-dependent, so two
+  planners that always agree on plan *cost* can return different cost-equal *paths*, which give
+  different service times, which give different releases, and the delays compound. Cost
+  equivalence does not imply outcome equivalence once order is what is being measured.
 - **The default swap constraint is stronger than standard CBS, and the standard rule is
   available.** By default a swap forbids each agent's destination cell rather than the edge, so
   the tree is incomplete and Approach 1's optimality is relative to our constraint scheme.
