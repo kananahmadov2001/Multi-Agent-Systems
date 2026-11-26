@@ -196,9 +196,8 @@ composite run below that suppressed 52 of 67 calls.
 ### Do the stages compose?
 
 Every stage above was measured on its own, one substitution at a time, which is what makes the
-comparisons readable. It is not the same as having run the pipeline. `--selector llm` and
-`--decomposer llm` fall back to scripted stand-ins when `--live` is absent, so the whole thing
-can be run at once for nothing:
+comparisons readable. It is not the same as having run the pipeline. Without `--live`, every stage that would call a model uses the scripted `Oracle` in
+`pipeline_bench.py` instead, so the whole thing can be run at once for nothing:
 
 ```bash
 python3 pipeline_bench.py --selector llm --decomposer llm --arbiter hybrid \
@@ -237,7 +236,7 @@ without reference to the search code — accepts it.
 
 | Folder | What it holds |
 |---|---|
-| `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `*_fd_haiku` (the headline runs on all three sets), `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search), `*_fd_equal20` and `*_fd_equal50` (both LLM approaches at the same call cap), `*_fd_edge` (`--conflicts standard`, Approach 1 only), and `hcb_fd_cbs` / `hcb_fd_equal50` / `hcb_fd_edge` (the CBS-regenerated hard set), and `hard_fd_edge_all` (all three approaches under edge constraints, scripted policies). |
+| `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `*_fd_haiku` (the headline runs on all three sets), `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search), `*_fd_equal20` and `*_fd_equal50` (both LLM approaches at the same call cap), `*_fd_edge` (`--conflicts standard`, Approach 1 only), and `hcb_fd_cbs` / `hcb_fd_equal50` / `hcb_fd_edge` (the CBS-regenerated hard set), and `hard_fd_edge_all` (all three approaches under edge constraints, scripted policies). `fd_results`, `fd_random` and `fd_sweep` are the first Fast Downward runs, Approach 1 only; their numbers are reproduced exactly by the CBS rows of the matching `*_fd_haiku` file, so prefer those. |
 | `results/pipeline/` | Pipeline runs: `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_fd_llmselect` and `pipeline_fd_llmdecomp` (an LLM in place of the selection and decomposition heuristics), `pipeline_colored*`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). Every pipeline CSV carries a `detail` column saying why the last attempt ended, so a capped arbitration failure is distinguishable from an exhausted one; measured, no committed configuration fails on the node cap. |
 | `results/ordering/` | `pipeline_order_check` and `pipeline_order_repair` (grid planner) and `pipeline_order_repair_fd` (Fast Downward). Read against `results/pipeline/pipeline_results.csv` (44/60), the same configuration with ordering off. |
 | `results/authored/` | `single`, `single_summary`, `routes` are `.txt`: one problem at a time, standalone. `pipeline_authored_4x4*.csv` are the in-pipeline runs at 4x4 horizon 12 -- `_compiled` is the scripted-author ceiling, the other two are one shot and one repair round. |

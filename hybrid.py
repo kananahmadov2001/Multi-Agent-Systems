@@ -195,3 +195,9 @@ def solve_hybrid_dfs(grid, agents, llm, horizon=30, max_nodes=2000, max_calls=20
         return None
 
     return dfs({a: frozenset() for a in agents}, paths), stats
+
+
+if __name__ == "__main__":
+    # This module has no self-check of its own; running it used to exit silently,
+    # which reads like a passing test in a regression sweep and is not one.
+    print(__file__.rsplit("/", 1)[-1] + ": no self-check here -- run test_hybrid.py")

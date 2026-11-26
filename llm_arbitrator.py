@@ -184,3 +184,9 @@ def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single,
             resolved = True
             decisions.append(f"{len(decisions) + 1}. collision at {conflict[agent][0]}, t={conflict[agent][1]}: "
                              f"you chose {agent}; it replanned ({len(new_path) - 1} steps)")
+
+
+if __name__ == "__main__":
+    # This module has no self-check of its own; running it used to exit silently,
+    # which reads like a passing test in a regression sweep and is not one.
+    print(__file__.rsplit("/", 1)[-1] + ": no self-check here -- run test_llm.py")

@@ -12,6 +12,10 @@ import csv, json, re, sys
 from collections import Counter
 from llm_arbitrator import parse_choice
 
+if len(sys.argv) != 3:
+    raise SystemExit("usage: python3 analyze.py RESULTS.csv TRANSCRIPTS.jsonl\n"
+                     "  both come from a --live bench run with --out and --log")
+
 csv_path, log_path = sys.argv[1], sys.argv[2]
 rows = list(csv.DictReader(open(csv_path)))
 logs = [json.loads(l) for l in open(log_path)]
