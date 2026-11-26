@@ -232,6 +232,19 @@ without reference to the search code — accepts it.
 | Instance generation | `instances.py`, `hard_cbs.py` (the `hcb` set), `pipeline_instances.py` |
 | Agent-authored PDDL | `authored_pddl.py` |
 
+### One caveat on the live results
+
+The committed Haiku runs were made before the prompts were reworded to handle more than one
+constraint shape. Approach 2 used to read `forbid a1 from being at (0, 2) at time 2`; it now
+reads `require that a1 not be at (0, 2) at t=2`, and the instruction line, the constraint list
+and the decision log changed with it. Approach 3's node descriptions changed the same way.
+
+The two wordings say the same thing and no committed number moved, because every run since has
+used the scripted policies, which read only the `OPTION` lines. But a model is not guaranteed to
+answer a reworded prompt identically. Any new live run therefore belongs in its own column, not
+appended to a table of the old ones, and a live rerun of an old configuration is a fresh
+measurement rather than a reproduction.
+
 ## Results folder
 
 | Folder | What it holds |
