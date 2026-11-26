@@ -174,16 +174,16 @@ def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single,
             if new_path is None:
                 stats["failed_replans"] += 1
                 failed.add(agent)
-                decisions.append(f"{len(decisions) + 1}. collision at {conflict[agent][0]}, t={conflict[agent][1]}: "
-                                 f"you chose {agent}, but it has no path that avoids it")
-                notes.append(f"{agent} has no path that avoids {conflict[agent][0]} "
-                             f"at time {conflict[agent][1]}. Choose the other agent.")
+                decisions.append(f"{len(decisions) + 1}. conflict: you chose {agent}, to "
+                                 f"{describe(conflict[agent])}, but then it has no path")
+                notes.append(f"{agent} has no path if it must {describe(conflict[agent])}. "
+                             f"Choose the other agent.")
                 continue
             constraints[agent] = cons
             paths[agent] = new_path
             resolved = True
-            decisions.append(f"{len(decisions) + 1}. collision at {conflict[agent][0]}, t={conflict[agent][1]}: "
-                             f"you chose {agent}; it replanned ({len(new_path) - 1} steps)")
+            decisions.append(f"{len(decisions) + 1}. conflict: you chose {agent}, to "
+                             f"{describe(conflict[agent])}; it replanned ({len(new_path) - 1} steps)")
 
 
 if __name__ == "__main__":
