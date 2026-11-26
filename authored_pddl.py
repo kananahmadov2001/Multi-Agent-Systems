@@ -200,15 +200,33 @@ def reference(grid, start, route, horizon):
 
 
 def size_table():
+    """How big the problem an agent would have to write actually is.
+
+    Two sites, not one, is the case that settles whether authoring is possible:
+    the layered encoding copies every cell once per site served, so a route
+    problem is several times a single-goal one. The rightmost column is the
+    number that matters, because it is what the agent has to emit in one reply
+    and models cap their output in tokens, not characters.
+    """
+    from fd_planner import make_route_problem
     print("\nWhat the compiled problem costs, which is why the pipeline compiles:")
-    print(f"  {'grid':>6} {'horizon':>8} {'objects':>9} {'edges':>8} {'chars':>9}")
-    for size, horizon in ((3, 5), (3, 8), (4, 8), (5, 12), (5, 20)):
-        rows = ["." * size] * size
-        g = Grid(rows)
-        p = make_problem(g, (0, 0), (size - 1, size - 1), frozenset(), horizon)
-        objs = len(re.search(r"\(:objects (.*?) - node\)", p, re.S).group(1).split())
-        print(f"  {str(size)+'x'+str(size):>6} {horizon:>8} {objs:>9} {len(EDGE.findall(p)):>8} {len(p):>9}")
-    print("  Our benchmark instances are 5x5 at horizon 20, the last row.")
+    print(f"  {'grid':>6} {'horizon':>8} {'goal':>8} {'objects':>9} {'edges':>8} "
+          f"{'chars':>9} {'~tokens':>9}")
+    for size, horizon in ((3, 5), (3, 8), (4, 8), (4, 12), (5, 12), (5, 20)):
+        g = Grid(["." * size] * size)
+        far = (size - 1, size - 1)
+        cases = [("single", make_problem(g, (0, 0), far, frozenset(), horizon)),
+                 ("2 sites", make_route_problem(g, (0, 0), ((0, size - 1), far),
+                                                frozenset(), horizon))]
+        for label, p in cases:
+            if not p:
+                continue
+            objs = len(re.search(r"\(:objects (.*?) - node\)", p, re.S).group(1).split())
+            print(f"  {str(size)+'x'+str(size):>6} {horizon:>8} {label:>8} {objs:>9} "
+                  f"{len(EDGE.findall(p)):>8} {len(p):>9} {len(p)//4:>9,}")
+    print("  Our benchmark instances are 5x5 at horizon 20. A two-site route problem there")
+    print("  is past what a model will emit in one reply, which is why --authored runs")
+    print("  were done at 4x4 horizon 12 instead.")
 
 
 REPAIR = """Your previous attempt was rejected. Fix it and return the corrected problem file.

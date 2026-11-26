@@ -57,6 +57,31 @@ def _last_vertex_block(constraints, cell):
                default=-1)
 
 
+def describe(x):
+    """A constraint in words, whatever shape it is.
+
+    Four shapes share one tree now -- a vertex ban, an edge ban, a deadline and
+    a release -- so a caller that used to unpack a (cell, time) pair asks here
+    instead. The LLM prompts are the reason this exists: under --conflicts
+    standard a conflict is a 3-tuple, and a formatter that assumes a pair
+    silently writes nonsense into the prompt.
+    """
+    if isinstance(x, (set, frozenset)):
+        return f"stay off {sorted({e[0] for e in x})[0]} until after t={max(e[1] for e in x)}"
+    if len(x) == 3 and x[0] == "by":
+        return f"serve {x[1]} no later than t={x[2]}"
+    if len(x) == 3 and x[0] == "release":
+        return f"not serve waypoint {x[1]} before t={x[2]}"
+    if len(x) == 3:
+        return f"not move {x[0]} -> {x[1]} at t={x[2]}"
+    return f"not be at {x[0]} at t={x[1]}"
+
+
+def sort_key(x):
+    """Order constraints of any shape by time, then by how they read."""
+    return (x[2] if len(x) == 3 and not isinstance(x, (set, frozenset)) else x[1], describe(x))
+
+
 def plan_single(grid, start, goal, constraints, horizon):
     """Shortest-time path honoring vertex and edge bans, or None.
 

@@ -87,6 +87,10 @@ def main():
     ap.add_argument("--log", default=None)
     ap.add_argument("--out", default="results.csv")
     ap.add_argument("--dfs", action="store_true")
+    ap.add_argument("--conflicts", choices=("vertex", "standard"), default="vertex",
+                    help="vertex: our stronger swap rule. standard: proper CBS edge "
+                         "constraints, which keep the tree complete. Applies to all "
+                         "three approaches, so the comparison stays like-for-like.")
     ap.add_argument("--a2-calls", type=int, default=20, help="call budget per case for Approach 2 (default 20)")
     ap.add_argument("--a3-calls", type=int, default=50, help="call budget per case for Approach 3 (default 50)")
     a = ap.parse_args()
@@ -135,7 +139,8 @@ def main():
     # every approach: (label, make LLM or None, function(grid, agents, llm)); a fresh LLM object per run
     approaches = [
         ("1 CBS best-first", None,
-         lambda g, ag, llm: solve_best_first(g, ag, horizon=HORIZON, max_nodes=6000)),
+         lambda g, ag, llm: solve_best_first(g, ag, horizon=HORIZON, max_nodes=6000,
+                                             conflicts=a.conflicts)),
     ]
     if a.dfs:                                   # ablation: the earlier depth-first search
         approaches += [
@@ -146,9 +151,13 @@ def main():
         ]
     for name, mk2, mk3 in policies:
         approaches.append((f"2 LLM no tree [{name}]", mk2,
-                           lambda g, ag, llm: solve_llm(g, ag, llm, horizon=HORIZON, max_calls=a.a2_calls)))
+                           lambda g, ag, llm: solve_llm(g, ag, llm, horizon=HORIZON,
+                                                        max_calls=a.a2_calls,
+                                                        conflicts=a.conflicts)))
         approaches.append((f"3 LLM-guided CBS [{name}]", mk3,
-                           lambda g, ag, llm: solve_hybrid(g, ag, llm, horizon=HORIZON, max_nodes=500, max_calls=a.a3_calls)))
+                           lambda g, ag, llm: solve_hybrid(g, ag, llm, horizon=HORIZON,
+                                                           max_nodes=500, max_calls=a.a3_calls,
+                                                           conflicts=a.conflicts)))
         if a.dfs:
             approaches.append((f"3 hybrid DFS ablation [{name}]", mk2,
                                lambda g, ag, llm: solve_hybrid_dfs(g, ag, llm, horizon=HORIZON, max_nodes=500, max_calls=40)))

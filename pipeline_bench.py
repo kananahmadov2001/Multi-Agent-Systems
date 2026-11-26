@@ -27,7 +27,8 @@ from selection import POLICIES, Selection
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
-FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "teams_tried",
+FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "detail",
+          "teams_tried",
           "team", "team_cost", "steps", "nodes", "fd_calls", "llm_calls", "arbiter")
 ORDER_FIELDS = ("ordering", "ordering_conflicts", "ordering_repairs", "ordering_rounds")
 AUTHORED_FIELDS = ("authored_problems", "authored_calls", "authored_ok",
@@ -189,6 +190,7 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         "strategy": strategy,
         "solved": int(result.ok),
         "failure": "" if result.ok else result.failure,
+        "detail": "" if result.ok else (result.detail or ""),
         "teams_tried": len(result.attempts),
         "team": ";".join(win.names) if win else "",
         "team_cost": round(sum(a.cost for a in inst.pool if win and a.name in win.names), 1) if win else "",

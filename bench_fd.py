@@ -214,15 +214,18 @@ def main():
                                       horizon=HORIZON, max_nodes=500, planner=planner)),
         ]
     for name, mk2, mk3 in policies:
-        approaches.append((f"2 LLM no tree [{name}] [FD]", mk2,
+        edge = " [edge]" if a.conflicts == "standard" else ""
+        approaches.append((f"2 LLM no tree [{name}] [FD]{edge}", mk2,
                            lambda g, ag, llm: solve_llm(g, ag, llm, horizon=HORIZON,
-                                                        max_calls=a.a2_calls, planner=planner)))
-        approaches.append((f"3 LLM-guided CBS [{name}] [FD]", mk3,
+                                                        max_calls=a.a2_calls, planner=planner,
+                                                        conflicts=a.conflicts)))
+        approaches.append((f"3 LLM-guided CBS [{name}] [FD]{edge}", mk3,
                            lambda g, ag, llm: solve_hybrid(g, ag, llm, horizon=HORIZON, max_nodes=500,
-                                                           max_calls=a.a3_calls, planner=planner)))
+                                                           max_calls=a.a3_calls, planner=planner, conflicts=a.conflicts)))
         if a.dfs:
             approaches.append((f"3 hybrid DFS ablation [{name}] [FD]", mk2,
                                lambda g, ag, llm: solve_hybrid_dfs(g, ag, llm, horizon=HORIZON,
+                                                                   conflicts=a.conflicts,
                                                                    max_nodes=500, max_calls=40,
                                                                    planner=planner)))
     labels = [x[0] for x in approaches]

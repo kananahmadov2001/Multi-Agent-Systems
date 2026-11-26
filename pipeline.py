@@ -78,6 +78,16 @@ class PipelineResult:
         return None if self.ok else self.attempts[-1].kind
 
     @property
+    def detail(self):
+        """Why the last attempt ended, or None when solved.
+
+        The kind alone cannot separate "no conflict-free plan exists" from "we
+        ran out of node budget", and a failure count that mixes the two reads
+        as a capability claim when half of it is a cap.
+        """
+        return None if self.ok else self.attempts[-1].detail
+
+    @property
     def breakdown(self):
         out = {}
         for a in self.attempts:

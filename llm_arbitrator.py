@@ -15,7 +15,7 @@ import json
 import os
 import re
 
-from cbs_baseline import find_conflict, plan_single
+from cbs_baseline import describe, find_conflict, plan_single, sort_key
 
 
 # ---------- LLM backends: each is a callable prompt -> text, with a .log ----------
@@ -87,7 +87,7 @@ def _picture(grid, paths):
 def make_prompt(grid, agents, paths, conflict, notes, extra=None):
     lines = ["Several agents move on a grid, one step per time unit (a step can be a wait).",
              "Each agent planned alone. Two of the plans collide. Pick ONE agent to be",
-             "forbidden from the colliding cell at that time. That agent will replan around it.",
+             "constrained out of the conflict. That agent will replan around it.",
              "",
              "Grid (row 0 is the top, '#' is a wall):", _picture(grid, paths), "",
              "Agents (start -> goal) and their current plans, as the cell at t=0,1,2,...:"]
@@ -96,8 +96,7 @@ def make_prompt(grid, agents, paths, conflict, notes, extra=None):
         lines.append(f"  {a}: {s} -> {g}, plan {paths[a]}")
     lines += ["", "The collision. You can only constrain one of these agents:"]
     for a in sorted(conflict):
-        cell, t = conflict[a]
-        lines.append(f"  OPTION {a}: forbid {a} from being at {cell} at time {t}")
+        lines.append(f"  OPTION {a}: require that {a} {describe(conflict[a])}")
     if notes:
         lines += ["", "What already happened at this collision:"] + [f"  - {n}" for n in notes]
     if extra:
@@ -120,7 +119,8 @@ def parse_choice(text, options, key="constrain"):
 
 # ---------- the arbitrator ----------
 
-def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single):
+def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single,
+              conflicts="vertex"):
     """Returns (paths or None, stats), same shape as cbs_baseline.solve."""
     stats = {"llm_calls": 0, "replans": 0, "failed_replans": 0,
              "invalid_answers": 0, "hit_limit": False}
@@ -129,7 +129,7 @@ def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single):
 
     def memory():
         lines = []
-        cons = [f"{a}: " + ", ".join(f"{c} at t={t}" for c, t in sorted(constraints[a], key=lambda x: (x[1], x[0])))
+        cons = [f"{a}: must " + ", ".join(describe(x) for x in sorted(constraints[a], key=sort_key))
                 for a in sorted(agents) if constraints[a]]
         if cons:
             lines += ["Constraints already applied (they stay in force, each agent must avoid all of its own):"]
@@ -148,7 +148,7 @@ def solve_llm(grid, agents, llm, horizon=30, max_calls=20, planner=plan_single):
             return None, stats
 
     while True:
-        conflict = find_conflict(paths)
+        conflict = find_conflict(paths, mode=conflicts)
         if conflict is None:
             return paths, stats
         failed, notes, resolved = set(), [], False

@@ -95,6 +95,10 @@ python3 bench_fd.py --set hard --fd "$FD" --live --out results/new/hard.csv --lo
 python3 analyze.py results/fd/hard_fd_haiku.csv results/fd/hard_fd_haiku.jsonl   # free: read a finished run
 ```
 
+`bench.py` takes `--conflicts vertex|standard` too, and there it applies to **all three**
+approaches, so the comparison stays like-for-like. Under `bench_fd.py` the same flag reaches
+all three as well.
+
 Options: `--set easy|hard|hcb|random|sweep|all`, `--conflicts vertex|standard`, `--start N`,
 `--limit N`, `--only NAME[,NAME]`, `--repeat R`, `--search CONFIG`, `--a2-calls N`,
 `--a3-calls N`, `--fakes`, `--fd-mode run|exec`.
@@ -105,8 +109,9 @@ CBS spends at least 20 expansions on it, rather than when two depth-first rule o
 which is what filtered the original hard set. It is opt-in; `--set all` does not include it.
 
 `--conflicts standard` swaps our vertex rule for proper edge constraints, which keeps the tree
-complete. It applies to Approach 1 only — the LLM arbiters always use the default rule — so an
-edge run is a study of the constraint scheme, not of arbitration.
+complete. It reaches all three approaches, so an edge run is a like-for-like comparison and not
+only a study of Approach 1. Live LLM runs under edge constraints were not affordable, so the
+committed edge results use the scripted policies.
 
 `--fakes` adds the scripted policies to Approaches 2 and 3 at no cost. Use it as a regression
 test, not as a result: the policies are deterministic, so any difference between two runs is the
@@ -209,14 +214,14 @@ without reference to the search code — accepts it.
 
 | Folder | What it holds |
 |---|---|
-| `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `*_fd_haiku` (the headline runs on all three sets), `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search), `*_fd_equal20` and `*_fd_equal50` (both LLM approaches at the same call cap), `*_fd_edge` (`--conflicts standard`, Approach 1 only), and `hcb_fd_cbs` / `hcb_fd_equal50` / `hcb_fd_edge` (the CBS-regenerated hard set). |
-| `results/pipeline/` | Pipeline runs. `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_fd_llmselect` and `pipeline_fd_llmdecomp` (an LLM in place of the selection and decomposition heuristics), `pipeline_colored*`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). |
+| `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `*_fd_haiku` (the headline runs on all three sets), `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search), `*_fd_equal20` and `*_fd_equal50` (both LLM approaches at the same call cap), `*_fd_edge` (`--conflicts standard`, Approach 1 only), and `hcb_fd_cbs` / `hcb_fd_equal50` / `hcb_fd_edge` (the CBS-regenerated hard set), and `hard_fd_edge_all` (all three approaches under edge constraints, scripted policies). |
+| `results/pipeline/` | Pipeline runs: `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_fd_llmselect` and `pipeline_fd_llmdecomp` (an LLM in place of the selection and decomposition heuristics), `pipeline_colored*`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). Every pipeline CSV carries a `detail` column saying why the last attempt ended, so a capped arbitration failure is distinguishable from an exhausted one; measured, no committed configuration fails on the node cap. |
 | `results/ordering/` | `pipeline_order_check` and `pipeline_order_repair` (grid planner) and `pipeline_order_repair_fd` (Fast Downward). Read against `results/pipeline/pipeline_results.csv` (44/60), the same configuration with ordering off. |
 | `results/authored/` | `single`, `single_summary`, `routes` are `.txt`: one problem at a time, standalone. `pipeline_authored_4x4*.csv` are the in-pipeline runs at 4x4 horizon 12 -- `_compiled` is the scripted-author ceiling, the other two are one shot and one repair round. |
 | `results/haiku/` | Earlier arbitration runs on our own grid planner, kept so the PDDL numbers can be compared against them. |
 | `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap. |
 | `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. |
-| `results/control/` | `control.txt`: output of `control.py`. |
+| `results/control/` | `control.txt`, the output of `control.py`, and `hard_edge_all.csv`: all three approaches on the hard set under standard edge constraints with the scripted policies, to be read against the vertex numbers in `results/haiku/`. |
 | `results/first_run_depth_first/` | **First run only, kept for the record.** Made with the earlier depth-first version of Approach 1 and a 1,500-token reply limit that cut some replies off. Do not mix with the tables above. |
 
 Each run has a `.csv` (one row per instance and approach) and, for live runs, a `.jsonl` with

@@ -16,7 +16,7 @@ kept as an ablation.
 """
 import itertools
 
-from cbs_baseline import find_conflict, plan_single
+from cbs_baseline import describe, find_conflict, plan_single, sort_key
 from llm_arbitrator import make_prompt, parse_choice
 
 HYBRID_NOTE = ("This is a search. If your choice leads to a dead end, the other agent will be "
@@ -24,7 +24,7 @@ HYBRID_NOTE = ("This is a search. If your choice leads to a dead end, the other 
 
 
 def _cons_text(cons):
-    parts = [f"{a} not at {c} at t={t}" for a in sorted(cons) for c, t in sorted(cons[a], key=lambda x: (x[1], x[0]))]
+    parts = [f"{a} must {describe(x)}" for a in sorted(cons) for x in sorted(cons[a], key=sort_key)]
     return "; ".join(parts) or "none"
 
 
@@ -32,8 +32,8 @@ def make_node_prompt(grid, agents, cands, history):
     lines = ["Several agents move on a grid, one step per time unit (a step can be a wait).",
              "Each agent planned alone and then plans were repaired by a search tree. Every tree node is a set of",
              "constraints (an agent may not be at a cell at a time) plus each agent's current plan under them.",
-             "Each open node below still has one collision. Expanding a node creates two children: one forbids the",
-             "first agent from the collision cell at that time, the other forbids the second agent. A child whose",
+             "Each open node below still has one collision. Expanding a node creates two children, each",
+             "constraining one of the two agents out of it. A child whose",
              "agent has no path is dropped. The search ends at the first node with no collision.",
              "",
              "Grid (row 0 is the top, '#' is a wall):", "\n".join("".join(r) for r in grid.rows), "",
@@ -46,7 +46,7 @@ def make_node_prompt(grid, agents, cands, history):
         lines.append(f"OPTION {n['id']}: depth {n['depth']}, total steps {n['cost']}")
         lines.append(f"    constraints: {_cons_text(n['cons'])}")
         lines.append("    next collision, children would be: " +
-                     " | ".join(f"forbid {a} at {c[a][0]} t={c[a][1]}" for a in sorted(c)))
+                     " | ".join(f"{a} must {describe(c[a])}" for a in sorted(c)))
         for a in sorted(n["paths"]):
             lines.append(f"    plan {a}: {n['paths'][a]}")
     if history:
@@ -59,6 +59,7 @@ def make_node_prompt(grid, agents, cands, history):
 
 
 def solve_hybrid(grid, agents, llm, horizon=30, max_nodes=500, max_calls=50,
+                 conflicts="vertex",
                  planner=plan_single, top_k=4):
     """LLM-guided CBS. Returns (paths or None, stats), same shape as cbs_baseline.solve_best_first.
     An invalid reply is retried once; if it is still invalid the cheapest node is used and stats["fallbacks"]
@@ -72,7 +73,7 @@ def solve_hybrid(grid, agents, llm, horizon=30, max_nodes=500, max_calls=50,
         paths[a] = planner(grid, s, g, frozenset(), horizon)
         if paths[a] is None:
             return None, stats
-    conflict = find_conflict(paths)
+    conflict = find_conflict(paths, mode=conflicts)
     if conflict is None:
         return paths, stats
 
@@ -127,12 +128,12 @@ def solve_hybrid(grid, agents, llm, horizon=30, max_nodes=500, max_calls=50,
                 continue
             ps = dict(chosen["paths"])
             ps[agent] = new_path
-            conf = find_conflict(ps)
+            conf = find_conflict(ps, mode=conflicts)
             if conf is None:
                 return ps, stats                        # a conflict-free plan: done
             child = node(cons, ps, chosen["depth"] + 1, conf)
             open_.append(child)
-            made.append(f"{child['id']} ({child['cost']} steps, forbid {agent})")
+            made.append(f"{child['id']} ({child['cost']} steps, constrains {agent})")
         history.append(f"expanded {chosen['id']} (depth {chosen['depth']}, {chosen['cost']} steps) -> "
                        + (", ".join(made) if made else "no children"))
     return None, stats
@@ -143,6 +144,7 @@ def solve_hybrid(grid, agents, llm, horizon=30, max_nodes=500, max_calls=50,
 # ---------------------------------------------------------------------------------------------
 
 def solve_hybrid_dfs(grid, agents, llm, horizon=30, max_nodes=2000, max_calls=200,
+                     conflicts="vertex",
                      planner=plan_single):
     """Returns (paths or None, stats). Same shape as cbs_baseline.solve."""
     stats = {"nodes": 0, "replans": 0, "backtracks": 0, "llm_calls": 0,
@@ -170,7 +172,7 @@ def solve_hybrid_dfs(grid, agents, llm, horizon=30, max_nodes=2000, max_calls=20
         if stats["nodes"] > max_nodes or stats["llm_calls"] >= max_calls:
             stats["hit_limit"] = True
             return None
-        conflict = find_conflict(paths)
+        conflict = find_conflict(paths, mode=conflicts)
         if conflict is None:
             return paths
         for agent in order(conflict, paths):

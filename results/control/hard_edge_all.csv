@@ -1,0 +1,126 @@
+instance,agents,approach,run,solved,failed_verify,steps,makespan,nodes,replans,backtracks,llm_calls,invalid,fallbacks,truncated,tokens_in,tokens_out,seconds,hit_limit,model,call_cap
+pocket-3,2,1 CBS best-first,1,1,0,7,4,14,28,2,0,0,0,0,0,0,0.0,0,fake,20/50
+pocket-3,2,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,22,0,20,0,0,0,0,0,0.0,1,fake,20/50
+pocket-3,2,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,7,4,10,22,2,9,0,0,0,0,0,0.0,0,fake,20/50
+pocket-3,2,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,22,0,20,0,0,0,0,0,0.0,1,fake,20/50
+pocket-3,2,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,11,6,9,19,3,8,0,0,0,0,0,0.0,0,fake,20/50
+pocket-5,2,1 CBS best-first,1,1,0,11,6,16,32,0,0,0,0,0,0,0,0.0,0,fake,20/50
+pocket-5,2,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,22,0,20,0,0,0,0,0,0.0,1,fake,20/50
+pocket-5,2,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,11,6,11,24,0,10,0,0,0,0,0,0.0,0,fake,20/50
+pocket-5,2,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,22,0,20,0,0,0,0,0,0.0,1,fake,20/50
+pocket-5,2,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,15,8,16,33,3,15,0,0,0,0,0,0.0,0,fake,20/50
+pocket-5-mid,2,1 CBS best-first,1,1,0,11,7,16,32,0,0,0,0,0,0,0,0.0,0,fake,20/50
+pocket-5-mid,2,2 LLM no tree [fake: a1 / cheapest node],1,1,0,11,7,0,6,0,4,0,0,0,0,0,0.0,0,fake,20/50
+pocket-5-mid,2,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,11,7,8,17,0,7,0,0,0,0,0,0.0,0,fake,20/50
+pocket-5-mid,2,2 LLM no tree [fake: longer plan / last of 4],1,1,0,11,7,0,6,0,4,0,0,0,0,0,0.0,0,fake,20/50
+pocket-5-mid,2,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,11,7,4,10,0,3,0,0,0,0,0,0.0,0,fake,20/50
+three-in-corridor,3,1 CBS best-first,1,0,0,0,0,6001,12003,328,0,0,0,0,0,0,0.37,1,fake,20/50
+three-in-corridor,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+three-in-corridor,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,0,0,0,0,51,105,0,50,0,0,0,0,0,0.0,1,fake,20/50
+three-in-corridor,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+three-in-corridor,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,0,0,0,0,51,105,1,50,0,0,0,0,0,0.0,1,fake,20/50
+plus-crossing-3,3,1 CBS best-first,1,1,0,9,4,16,33,0,0,0,0,0,0,0,0.0,0,fake,20/50
+plus-crossing-3,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,9,4,0,7,0,4,0,0,0,0,0,0.0,0,fake,20/50
+plus-crossing-3,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,9,4,8,18,0,7,0,0,0,0,0,0.0,0,fake,20/50
+plus-crossing-3,3,2 LLM no tree [fake: longer plan / last of 4],1,1,0,9,4,0,7,0,4,0,0,0,0,0,0.0,0,fake,20/50
+plus-crossing-3,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,9,4,4,11,0,3,0,0,0,0,0,0.0,0,fake,20/50
+hard1,3,1 CBS best-first,1,1,0,16,8,4,9,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard1,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,16,8,0,5,0,2,0,0,0,0,0,0.0,0,fake,20/50
+hard1,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,16,8,2,6,0,1,0,0,0,0,0,0.0,0,fake,20/50
+hard1,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard1,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,22,11,18,38,0,17,0,0,0,0,0,0.0,0,fake,20/50
+hard2,3,1 CBS best-first,1,1,0,8,4,2,5,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard2,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,8,4,0,4,0,1,0,0,0,0,0,0.0,0,fake,20/50
+hard2,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,8,4,1,4,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard2,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard2,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,8,4,1,4,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard3,3,1 CBS best-first,1,1,0,20,9,47,95,0,0,0,0,0,0,0,0.01,0,fake,20/50
+hard3,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,21,11,0,10,0,7,0,0,0,0,0,0.0,0,fake,20/50
+hard3,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,20,9,46,94,0,45,0,0,0,0,0,0.01,0,fake,20/50
+hard3,3,2 LLM no tree [fake: longer plan / last of 4],1,1,0,21,11,0,10,0,7,0,0,0,0,0,0.0,0,fake,20/50
+hard3,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,0,0,0,0,51,105,0,50,0,0,0,0,0,0.01,1,fake,20/50
+hard4,3,1 CBS best-first,1,1,0,17,7,12,25,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard4,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard4,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,17,7,11,25,0,10,0,0,0,0,0,0.0,0,fake,20/50
+hard4,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.01,1,fake,20/50
+hard4,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,21,7,18,39,0,17,0,0,0,0,0,0.0,0,fake,20/50
+hard5,3,1 CBS best-first,1,1,0,17,8,15,31,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard5,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,17,8,0,7,0,4,0,0,0,0,0,0.0,0,fake,20/50
+hard5,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,17,8,9,20,0,8,0,0,0,0,0,0.0,0,fake,20/50
+hard5,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard5,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,20,10,12,26,0,11,0,0,0,0,0,0.0,0,fake,20/50
+hard6,3,1 CBS best-first,1,1,0,19,7,3190,6381,0,0,0,0,0,0,0,0.44,0,fake,20/50
+hard6,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard6,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,19,7,32,66,0,31,0,0,0,0,0,0.01,0,fake,20/50
+hard6,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard6,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,0,0,0,0,51,105,0,50,0,0,0,0,0,0.01,1,fake,20/50
+hard7,3,1 CBS best-first,1,1,0,15,6,18,37,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard7,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard7,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,16,6,8,19,0,7,0,0,0,0,0,0.0,0,fake,20/50
+hard7,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard7,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,16,6,3,9,0,2,0,0,0,0,0,0.0,0,fake,20/50
+hard8,3,1 CBS best-first,1,1,0,16,6,23,47,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard8,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.01,1,fake,20/50
+hard8,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,16,6,20,43,0,19,0,0,0,0,0,0.0,0,fake,20/50
+hard8,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.01,1,fake,20/50
+hard8,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,20,8,34,71,0,33,0,0,0,0,0,0.01,0,fake,20/50
+hard9,3,1 CBS best-first,1,1,0,12,6,7,15,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard9,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard9,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,12,6,3,9,0,2,0,0,0,0,0,0.0,0,fake,20/50
+hard9,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard9,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,12,6,2,7,0,1,0,0,0,0,0,0.0,0,fake,20/50
+hard10,3,1 CBS best-first,1,1,0,21,7,19,39,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard10,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard10,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,21,7,17,36,0,16,0,0,0,0,0,0.0,0,fake,20/50
+hard10,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard10,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,23,9,5,12,0,4,0,0,0,0,0,0.0,0,fake,20/50
+hard11,3,1 CBS best-first,1,1,0,15,7,2,5,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard11,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,15,7,0,4,0,1,0,0,0,0,0,0.0,0,fake,20/50
+hard11,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,15,7,1,4,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard11,3,2 LLM no tree [fake: longer plan / last of 4],1,1,0,15,7,0,4,0,1,0,0,0,0,0,0.0,0,fake,20/50
+hard11,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,15,7,1,4,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard12,3,1 CBS best-first,1,1,0,19,8,64,129,0,0,0,0,0,0,0,0.01,0,fake,20/50
+hard12,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,19,8,0,9,0,6,0,0,0,0,0,0.0,0,fake,20/50
+hard12,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,19,8,32,66,0,31,0,0,0,0,0,0.0,0,fake,20/50
+hard12,3,2 LLM no tree [fake: longer plan / last of 4],1,1,0,19,8,0,9,0,6,0,0,0,0,0,0.0,0,fake,20/50
+hard12,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,20,9,11,24,0,10,0,0,0,0,0,0.0,0,fake,20/50
+hard13,3,1 CBS best-first,1,1,0,14,7,20,41,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard13,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard13,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,15,7,8,19,0,7,0,0,0,0,0,0.0,0,fake,20/50
+hard13,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard13,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,14,7,4,11,0,3,0,0,0,0,0,0.0,0,fake,20/50
+hard14,3,1 CBS best-first,1,0,0,0,0,6001,12003,840,0,0,0,0,0,0,0.89,1,fake,20/50
+hard14,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard14,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,0,0,0,0,51,105,1,50,0,0,0,0,0,0.01,1,fake,20/50
+hard14,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard14,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,0,0,0,0,51,105,12,50,0,0,0,0,0,0.01,1,fake,20/50
+hard15,3,1 CBS best-first,1,1,0,16,8,111,223,1,0,0,0,0,0,0,0.01,0,fake,20/50
+hard15,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,16,8,0,10,0,7,0,0,0,0,0,0.0,0,fake,20/50
+hard15,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,0,0,0,0,51,105,0,50,0,0,0,0,0,0.01,1,fake,20/50
+hard15,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard15,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,0,0,0,0,51,105,4,50,0,0,0,0,0,0.01,1,fake,20/50
+hard16,3,1 CBS best-first,1,1,0,15,6,31,63,1,0,0,0,0,0,0,0.0,0,fake,20/50
+hard16,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,15,6,0,8,0,5,0,0,0,0,0,0.0,0,fake,20/50
+hard16,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,15,6,16,34,1,15,0,0,0,0,0,0.0,0,fake,20/50
+hard16,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard16,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,21,9,47,96,9,46,0,0,0,0,0,0.01,0,fake,20/50
+hard17,3,1 CBS best-first,1,1,0,13,6,7,15,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard17,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard17,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,13,6,3,9,0,2,0,0,0,0,0,0.0,0,fake,20/50
+hard17,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard17,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,13,6,2,7,0,1,0,0,0,0,0,0.0,0,fake,20/50
+hard18,3,1 CBS best-first,1,1,0,21,7,1629,3259,0,0,0,0,0,0,0,0.31,0,fake,20/50
+hard18,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,24,10,0,16,0,13,0,0,0,0,0,0.0,0,fake,20/50
+hard18,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,0,0,0,0,51,105,0,50,0,0,0,0,0,0.01,1,fake,20/50
+hard18,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard18,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,0,0,0,0,51,105,0,50,0,0,0,0,0,0.01,1,fake,20/50
+hard19,3,1 CBS best-first,1,1,0,14,5,4,9,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard19,3,2 LLM no tree [fake: a1 / cheapest node],1,1,0,14,5,0,5,0,2,0,0,0,0,0,0.0,0,fake,20/50
+hard19,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,14,5,2,6,0,1,0,0,0,0,0,0.0,0,fake,20/50
+hard19,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard19,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,18,7,15,32,0,14,0,0,0,0,0,0.0,0,fake,20/50
+hard20,3,1 CBS best-first,1,1,0,11,4,3,7,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard20,3,2 LLM no tree [fake: a1 / cheapest node],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard20,3,3 LLM-guided CBS [fake: a1 / cheapest node],1,1,0,11,4,1,5,0,0,0,0,0,0,0,0.0,0,fake,20/50
+hard20,3,2 LLM no tree [fake: longer plan / last of 4],1,0,0,0,0,0,23,0,20,0,0,0,0,0,0.0,1,fake,20/50
+hard20,3,3 LLM-guided CBS [fake: longer plan / last of 4],1,1,0,11,4,1,5,0,0,0,0,0,0,0,0.0,0,fake,20/50

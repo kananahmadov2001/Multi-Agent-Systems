@@ -1,0 +1,126 @@
+instance,agents,approach,run,solved,failed_verify,steps,makespan,nodes,replans,backtracks,llm_calls,invalid,fallbacks,truncated,tokens_in,tokens_out,seconds,hit_limit,model,fd_calls,call_cap
+pocket-3,2,1 CBS best-first [FD] [edge],1,1,0,7,4,14,28,2,0,0,0,0,0,0,2.12,0,fake,28,20/50
+pocket-3,2,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,22,0,20,0,0,0,0,0,1.62,1,fake,22,20/50
+pocket-3,2,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,7,4,10,22,2,9,0,0,0,0,0,1.63,0,fake,22,20/50
+pocket-3,2,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,22,0,20,0,0,0,0,0,1.62,1,fake,22,20/50
+pocket-3,2,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,11,6,9,19,3,8,0,0,0,0,0,1.4,0,fake,19,20/50
+pocket-5,2,1 CBS best-first [FD] [edge],1,1,0,11,6,16,32,0,0,0,0,0,0,0,2.5,0,fake,32,20/50
+pocket-5,2,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,22,0,20,0,0,0,0,0,1.67,1,fake,22,20/50
+pocket-5,2,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,11,6,11,24,0,10,0,0,0,0,0,1.88,0,fake,24,20/50
+pocket-5,2,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,22,0,20,0,0,0,0,0,1.67,1,fake,22,20/50
+pocket-5,2,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,15,8,16,33,3,15,0,0,0,0,0,2.55,0,fake,33,20/50
+pocket-5-mid,2,1 CBS best-first [FD] [edge],1,1,0,11,7,16,32,0,0,0,0,0,0,0,2.59,0,fake,32,20/50
+pocket-5-mid,2,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,11,7,0,6,0,4,0,0,0,0,0,0.48,0,fake,6,20/50
+pocket-5-mid,2,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,11,7,8,17,0,7,0,0,0,0,0,1.36,0,fake,17,20/50
+pocket-5-mid,2,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,1,0,11,7,0,6,0,4,0,0,0,0,0,0.48,0,fake,6,20/50
+pocket-5-mid,2,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,11,7,4,10,0,3,0,0,0,0,0,0.8,0,fake,10,20/50
+three-in-corridor,3,1 CBS best-first [FD] [edge],1,0,0,0,0,6001,12003,417,0,0,0,0,0,0,301.1,1,fake,3513,20/50
+three-in-corridor,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,1.97,1,fake,23,20/50
+three-in-corridor,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,51,105,1,50,0,0,0,0,0,6.15,1,fake,70,20/50
+three-in-corridor,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,1.99,1,fake,23,20/50
+three-in-corridor,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,51,105,3,50,0,0,0,0,0,5.94,1,fake,70,20/50
+plus-crossing-3,3,1 CBS best-first [FD] [edge],1,1,0,9,4,15,31,0,0,0,0,0,0,0,1.77,0,fake,19,20/50
+plus-crossing-3,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,9,4,0,7,0,4,0,0,0,0,0,0.66,0,fake,7,20/50
+plus-crossing-3,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,9,4,7,17,0,6,0,0,0,0,0,1.02,0,fake,11,20/50
+plus-crossing-3,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,1,0,9,4,0,7,0,4,0,0,0,0,0,0.65,0,fake,7,20/50
+plus-crossing-3,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,9,4,3,9,0,2,0,0,0,0,0,0.75,0,fake,8,20/50
+hard1,3,1 CBS best-first [FD] [edge],1,1,0,16,8,8,17,0,0,0,0,0,0,0,1.77,0,fake,17,20/50
+hard1,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,16,8,0,6,0,3,0,0,0,0,0,0.64,0,fake,6,20/50
+hard1,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,16,8,4,10,0,3,0,0,0,0,0,1.04,0,fake,10,20/50
+hard1,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.23,1,fake,23,20/50
+hard1,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,22,11,32,66,1,31,0,0,0,0,0,6.74,0,fake,66,20/50
+hard2,3,1 CBS best-first [FD] [edge],1,1,0,8,4,2,5,0,0,0,0,0,0,0,0.51,0,fake,5,20/50
+hard2,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,8,4,0,4,0,1,0,0,0,0,0,0.41,0,fake,4,20/50
+hard2,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,8,4,1,4,0,0,0,0,0,0,0,0.4,0,fake,4,20/50
+hard2,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.26,1,fake,23,20/50
+hard2,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,8,4,1,4,0,0,0,0,0,0,0,0.41,0,fake,4,20/50
+hard3,3,1 CBS best-first [FD] [edge],1,1,0,20,9,83,167,0,0,0,0,0,0,0,13.05,0,fake,128,20/50
+hard3,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,21,11,0,9,0,6,0,0,0,0,0,0.92,0,fake,9,20/50
+hard3,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,51,105,0,50,0,0,0,0,0,8.69,1,fake,85,20/50
+hard3,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,1,0,21,11,0,9,0,6,0,0,0,0,0,0.91,0,fake,9,20/50
+hard3,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,21,9,19,40,0,18,0,0,0,0,0,3.92,0,fake,38,20/50
+hard4,3,1 CBS best-first [FD] [edge],1,1,0,17,7,4,9,0,0,0,0,0,0,0,0.99,0,fake,9,20/50
+hard4,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.49,1,fake,23,20/50
+hard4,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,17,7,1,5,0,0,0,0,0,0,0,0.55,0,fake,5,20/50
+hard4,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.49,1,fake,23,20/50
+hard4,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,17,7,1,5,0,0,0,0,0,0,0,0.55,0,fake,5,20/50
+hard5,3,1 CBS best-first [FD] [edge],1,1,0,17,8,15,31,0,0,0,0,0,0,0,2.95,0,fake,28,20/50
+hard5,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,17,8,0,7,0,4,0,0,0,0,0,0.8,0,fake,7,20/50
+hard5,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,17,8,9,20,0,8,0,0,0,0,0,2.0,0,fake,19,20/50
+hard5,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.27,1,fake,23,20/50
+hard5,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,20,10,12,26,0,11,0,0,0,0,0,2.52,0,fake,24,20/50
+hard6,3,1 CBS best-first [FD] [edge],1,0,0,0,0,6001,12003,0,0,0,0,0,0,0,737.02,1,fake,7702,20/50
+hard6,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.15,1,fake,23,20/50
+hard6,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,19,7,39,80,0,38,0,0,0,0,0,6.71,0,fake,70,20/50
+hard6,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.16,1,fake,23,20/50
+hard6,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,51,105,0,50,0,0,0,0,0,6.82,1,fake,71,20/50
+hard7,3,1 CBS best-first [FD] [edge],1,1,0,15,6,10,21,0,0,0,0,0,0,0,2.04,0,fake,20,20/50
+hard7,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.25,1,fake,23,20/50
+hard7,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,15,6,7,16,0,6,0,0,0,0,0,1.53,0,fake,15,20/50
+hard7,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.27,1,fake,23,20/50
+hard7,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,15,6,3,8,0,2,0,0,0,0,0,0.82,0,fake,8,20/50
+hard8,3,1 CBS best-first [FD] [edge],1,1,0,16,6,13,27,0,0,0,0,0,0,0,2.65,0,fake,24,20/50
+hard8,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.51,1,fake,23,20/50
+hard8,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,16,6,12,27,0,11,0,0,0,0,0,2.64,0,fake,24,20/50
+hard8,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.52,1,fake,23,20/50
+hard8,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,20,8,5,13,0,4,0,0,0,0,0,1.43,0,fake,13,20/50
+hard9,3,1 CBS best-first [FD] [edge],1,1,0,12,6,6,13,0,0,0,0,0,0,0,1.44,0,fake,13,20/50
+hard9,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.43,1,fake,23,20/50
+hard9,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,12,6,3,9,0,2,0,0,0,0,0,1.0,0,fake,9,20/50
+hard9,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.43,1,fake,23,20/50
+hard9,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,12,6,2,7,0,1,0,0,0,0,0,0.78,0,fake,7,20/50
+hard10,3,1 CBS best-first [FD] [edge],1,1,0,21,7,35,71,0,0,0,0,0,0,0,6.01,0,fake,58,20/50
+hard10,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.3,1,fake,23,20/50
+hard10,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,21,7,29,61,0,28,0,0,0,0,0,5.27,0,fake,51,20/50
+hard10,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.28,1,fake,23,20/50
+hard10,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,21,7,7,17,0,6,0,0,0,0,0,1.76,0,fake,17,20/50
+hard11,3,1 CBS best-first [FD] [edge],1,1,0,15,7,1,3,0,0,0,0,0,0,0,0.32,0,fake,3,20/50
+hard11,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,15,7,0,3,0,0,0,0,0,0,0,0.33,0,fake,3,20/50
+hard11,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,15,7,0,3,0,0,0,0,0,0,0,0.32,0,fake,3,20/50
+hard11,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,1,0,15,7,0,3,0,0,0,0,0,0,0,0.32,0,fake,3,20/50
+hard11,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,15,7,0,3,0,0,0,0,0,0,0,0.32,0,fake,3,20/50
+hard12,3,1 CBS best-first [FD] [edge],1,1,0,19,8,64,129,0,0,0,0,0,0,0,10.16,0,fake,104,20/50
+hard12,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,19,8,0,9,0,6,0,0,0,0,0,0.89,0,fake,9,20/50
+hard12,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,19,8,32,66,0,31,0,0,0,0,0,6.19,0,fake,63,20/50
+hard12,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,1,0,19,8,0,9,0,6,0,0,0,0,0,0.89,0,fake,9,20/50
+hard12,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,20,9,11,24,0,10,0,0,0,0,0,2.34,0,fake,24,20/50
+hard13,3,1 CBS best-first [FD] [edge],1,1,0,14,7,20,41,0,0,0,0,0,0,0,4.07,0,fake,39,20/50
+hard13,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.2,1,fake,23,20/50
+hard13,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,15,7,8,19,0,7,0,0,0,0,0,1.99,0,fake,19,20/50
+hard13,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.21,1,fake,23,20/50
+hard13,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,14,7,4,11,0,3,0,0,0,0,0,1.15,0,fake,11,20/50
+hard14,3,1 CBS best-first [FD] [edge],1,0,0,0,0,6001,12003,837,0,0,0,0,0,0,946.02,1,fake,9669,20/50
+hard14,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.23,1,fake,23,20/50
+hard14,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,51,105,1,50,0,0,0,0,0,10.61,1,fake,104,20/50
+hard14,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.22,1,fake,23,20/50
+hard14,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,51,105,12,50,0,0,0,0,0,7.83,1,fake,79,20/50
+hard15,3,1 CBS best-first [FD] [edge],1,1,0,16,8,111,223,1,0,0,0,0,0,0,22.96,0,fake,223,20/50
+hard15,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,16,8,0,10,0,7,0,0,0,0,0,1.05,0,fake,10,20/50
+hard15,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,51,105,0,50,0,0,0,0,0,10.85,1,fake,105,20/50
+hard15,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.23,1,fake,23,20/50
+hard15,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,51,105,4,50,0,0,0,0,0,10.73,1,fake,105,20/50
+hard16,3,1 CBS best-first [FD] [edge],1,1,0,15,6,16,33,1,0,0,0,0,0,0,3.28,0,fake,33,20/50
+hard16,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,15,6,0,7,0,4,0,0,0,0,0,0.71,0,fake,7,20/50
+hard16,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,15,6,8,18,0,7,0,0,0,0,0,1.8,0,fake,18,20/50
+hard16,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.19,1,fake,23,20/50
+hard16,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,21,9,27,56,4,26,0,0,0,0,0,5.47,0,fake,56,20/50
+hard17,3,1 CBS best-first [FD] [edge],1,1,0,13,6,7,15,0,0,0,0,0,0,0,1.67,0,fake,15,20/50
+hard17,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.42,1,fake,23,20/50
+hard17,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,13,6,3,9,0,2,0,0,0,0,0,1.02,0,fake,9,20/50
+hard17,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.43,1,fake,23,20/50
+hard17,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,13,6,2,7,0,1,0,0,0,0,0,0.78,0,fake,7,20/50
+hard18,3,1 CBS best-first [FD] [edge],1,1,0,21,7,1119,2239,0,0,0,0,0,0,0,169.87,0,fake,1704,20/50
+hard18,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,24,10,0,22,0,19,0,0,0,0,0,2.1,0,fake,22,20/50
+hard18,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,51,105,0,50,0,0,0,0,0,10.06,1,fake,103,20/50
+hard18,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.15,1,fake,23,20/50
+hard18,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,51,105,0,50,0,0,0,0,0,8.91,1,fake,92,20/50
+hard19,3,1 CBS best-first [FD] [edge],1,1,0,14,5,9,19,0,0,0,0,0,0,0,1.72,0,fake,17,20/50
+hard19,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,1,0,15,5,0,7,0,4,0,0,0,0,0,0.72,0,fake,7,20/50
+hard19,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,14,5,4,11,0,3,0,0,0,0,0,1.02,0,fake,10,20/50
+hard19,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.22,1,fake,23,20/50
+hard19,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,18,7,35,72,0,34,0,0,0,0,0,5.92,0,fake,59,20/50
+hard20,3,1 CBS best-first [FD] [edge],1,1,0,11,4,3,7,0,0,0,0,0,0,0,0.69,0,fake,7,20/50
+hard20,3,2 LLM no tree [fake: a1 / cheapest node] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.21,1,fake,23,20/50
+hard20,3,3 LLM-guided CBS [fake: a1 / cheapest node] [FD] [edge],1,1,0,11,4,1,5,0,0,0,0,0,0,0,0.49,0,fake,5,20/50
+hard20,3,2 LLM no tree [fake: longer plan / last of 4] [FD] [edge],1,0,0,0,0,0,23,0,20,0,0,0,0,0,2.2,1,fake,23,20/50
+hard20,3,3 LLM-guided CBS [fake: longer plan / last of 4] [FD] [edge],1,1,0,11,4,1,5,0,0,0,0,0,0,0,0.49,0,fake,5,20/50
