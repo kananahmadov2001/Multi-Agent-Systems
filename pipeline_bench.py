@@ -27,11 +27,12 @@ from selection import POLICIES, Selection
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
-FIELDS = ("instance", "sealed", "scarce", "strategy", "solved", "failure", "detail",
+FIELDS = ("instance", "selector", "decomposer", "planner", "ordering_mode",
+          "sealed", "scarce", "strategy", "solved", "failure", "detail",
           "teams_tried",
           "team", "team_cost", "steps", "nodes", "fd_calls", "llm_calls", "arbiter")
 ORDER_FIELDS = ("ordering", "ordering_conflicts", "ordering_repairs", "ordering_rounds")
-AUTHORED_FIELDS = ("authored_problems", "authored_calls", "authored_ok",
+AUTHORED_FIELDS = ("authored_problems", "authored_calls", "authored_cached", "authored_ok",
                    "authored_ok_first", "authored_ok_repair", "authored_malformed",
                    "authored_unsolvable", "authored_illegal", "authored_compiled")
 OUTCOMES = ("solved", "selection", "decomposition", "arbitration", "verification")
@@ -122,6 +123,42 @@ def canned_author():
     return author
 
 
+def canned_stage_llm(kind, inst, k):
+    """A scripted stand-in for the selection and decomposition prompts.
+
+    It returns what the default heuristics would choose, in the JSON the real
+    parsers expect, so a run with every stage switched on exercises the whole
+    composition -- llm_selector, llm_decomposer, the authored planner, the
+    arbiter and ordering all at once -- without an API key.
+
+    This is an integration test, not an experiment. The stand-in is not a model
+    and says nothing about judgement; it exists because every stage was measured
+    on its own and the stages had never been run together, which is where this
+    project's interaction bugs have come from.
+    """
+    import json as _json
+    from decompose import greedy_decompose
+    from selection import select
+
+    def reply(prompt):
+        if kind == "selector":
+            team = select(inst.pool, inst.task, k, strategy="coverage")
+            names = [a.name for a in team] if team else []
+            return _json.dumps({"team": names, "reason": "scripted stand-in"})
+        goals = greedy_decompose(inst.task, _TEAM[0], inst.sites)
+        if goals is None:
+            return _json.dumps({"feasible": False, "missing": list(inst.task.order),
+                                "reason": "scripted stand-in"})
+        routes = {a.name: [p for p in inst.task.order if inst.sites[p] in goals.get(a.name, [])]
+                  for a in _TEAM[0]}
+        return _json.dumps({"feasible": True, "routes": routes, "reason": "scripted stand-in"})
+
+    return reply
+
+
+_TEAM = [None]          # the decomposition stand-in needs the team the selector returned
+
+
 def make_solver(arbiter, llm, calls):
     """The pipeline's solver for one of the three arbitration approaches.
 
@@ -152,7 +189,26 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
     """
     run = run_colored if domain == "colored" else run_pipeline
     extra, planner, stats = {}, None, {}
-    if selector == "llm" or decomposer == "llm":
+    if (selector == "llm" or decomposer == "llm") and not live and make_llm is None:
+        # scripted stand-ins: same decisions as the heuristics, routed through the
+        # prompt-and-parse path, so the composition is what gets tested
+        from decompose import llm_decompose
+        from llm_select import propose_team
+
+        def sel(pool, task, kk, history=()):
+            team = propose_team(pool, task, kk, canned_stage_llm("selector", inst, kk),
+                                history=history, stats=stats)
+            _TEAM[0] = team
+            return team
+
+        if selector == "llm":
+            extra["selector"] = sel
+        if decomposer == "llm":
+            extra["decomposer"] = lambda task, team, sites: (
+                _TEAM.__setitem__(0, team) or
+                llm_decompose(task, team, sites, canned_stage_llm("decomposer", inst, k),
+                              grid=inst.grid, stats=stats))
+    elif selector == "llm" or decomposer == "llm":
         llm = AnthropicLLM() if live else Oracle(inst, k)
         if selector == "llm":
             extra["selector"] = llm_selector(llm, stats)
@@ -201,11 +257,18 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         "llm_calls": (spent if (arbiter != "cbs" or selector == "llm" or decomposer == "llm")
                       else ""),
         "arbiter": arbiter,
+        # the configuration that produced the row, so a result file is readable
+        # without its filename
+        "selector": selector,
+        "decomposer": decomposer,
+        "planner": ("authored+fd" if authored else "fd" if fd else "grid"),
+        "ordering_mode": ordering,
     }
     if authored:
         wrote = stats.get("authored", {})
         row.update(authored_problems=wrote.get("problems", 0),
-                   authored_calls=wrote.get("calls", 0), authored_ok=wrote.get("ok", 0),
+                   authored_calls=wrote.get("calls", 0),
+                   authored_cached=wrote.get("cached", 0), authored_ok=wrote.get("ok", 0),
                    authored_ok_first=wrote.get("ok_first", 0),
                    authored_ok_repair=wrote.get("ok_repair", 0),
                    authored_malformed=wrote.get("malformed", 0),

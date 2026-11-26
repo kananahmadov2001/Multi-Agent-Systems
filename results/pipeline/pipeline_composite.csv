@@ -1,0 +1,21 @@
+instance,selector,decomposer,planner,ordering_mode,sealed,scarce,strategy,solved,failure,detail,teams_tried,team,team_cost,steps,nodes,fd_calls,llm_calls,arbiter,ordering,ordering_conflicts,ordering_repairs,ordering_rounds
+co1,llm,llm,grid,repair,-,1,llm,0,selection,"does not cover ['fly', 'inspect', 'move']",1,,,,,,3,hybrid,repair,0,0,0
+co2,llm,llm,grid,repair,-,0,llm,1,,,1,a3;a5,3.4,9,0,,2,hybrid,repair,0,0,1
+co3,llm,llm,grid,repair,-,0,llm,1,,,1,a4;a6,4.1,21,1,,2,hybrid,repair,1,1,2
+co4,llm,llm,grid,repair,a1,0,llm,1,,,1,a3;a5,3.7,15,5,,5,hybrid,repair,1,1,2
+co5,llm,llm,grid,repair,-,0,llm,0,arbitration,ordering repair could not replan; this is not a proof of infeasibility,3,,,,,,21,hybrid,repair,13,12,15
+co6,llm,llm,grid,repair,-,0,llm,0,arbitration,ordering repair exhausted after 8 repair(s); this is not a proof of infeasibility,3,,,,,,36,hybrid,repair,9,8,11
+co7,llm,llm,grid,repair,-,1,llm,0,selection,"does not cover ['fly', 'inspect', 'move']",1,,,,,,3,hybrid,repair,0,0,0
+co8,llm,llm,grid,repair,a1,0,llm,1,,,2,a5;a6,3.6,19,0,,3,hybrid,repair,1,1,3
+co9,llm,llm,grid,repair,-,0,llm,0,arbitration,no conflict-free plan,3,,,,,,4,hybrid,repair,0,0,3
+co10,llm,llm,grid,repair,-,1,llm,0,selection,"does not cover ['carry', 'inspect', 'move']",1,,,,,,3,hybrid,repair,0,0,0
+co11,llm,llm,grid,repair,-,1,llm,0,selection,"does not cover ['fly', 'inspect', 'move']",1,,,,,,3,hybrid,repair,0,0,0
+co12,llm,llm,grid,repair,a1,0,llm,1,,,1,a2;a4,3.3,16,0,,2,hybrid,repair,1,1,2
+co13,llm,llm,grid,repair,-,0,llm,1,,,3,a1;a6,4.1,25,3,,6,hybrid,repair,1,1,4
+co14,llm,llm,grid,repair,-,0,llm,1,,,1,a4;a6,4.3,15,0,,2,hybrid,repair,0,0,1
+co15,llm,llm,grid,repair,-,0,llm,1,,,1,a1;a5,4.3,9,0,,2,hybrid,repair,0,0,1
+co16,llm,llm,grid,repair,-,0,llm,1,,,1,a1;a5,3.3,17,1,,2,hybrid,repair,1,1,2
+co17,llm,llm,grid,repair,-,0,llm,1,,,2,a2;a6,4.0,17,2,,33,hybrid,repair,10,9,11
+co18,llm,llm,grid,repair,-,0,llm,1,,,2,a2;a5,3.5,15,1,,3,hybrid,repair,1,1,3
+co19,llm,llm,grid,repair,-,0,llm,1,,,1,a5;a6,3.9,11,0,,2,hybrid,repair,1,1,2
+co20,llm,llm,grid,repair,-,0,llm,1,,,1,a3;a4,4.2,9,1,,2,hybrid,repair,0,0,1

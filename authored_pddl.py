@@ -272,8 +272,13 @@ def make_authored_planner(fd_dir, llm, base, search="astar(lmcut())", stats=None
     """
     seen = {} if stats is None else stats.setdefault("authored", {})
     for key in ("calls", "ok", "malformed", "unsolvable", "illegal",
-                "fallback_constrained", "ok_first", "ok_repair", "problems"):
+                "fallback_constrained", "ok_first", "ok_repair", "problems", "cached"):
         seen.setdefault(key, 0)
+    # The same unconstrained problem comes round again whenever an agent reappears
+    # in a later team, and make_fd_planner caches for exactly that reason. Without
+    # this the model is paid to answer a question it has already answered, and two
+    # runs of the same benchmark need not agree.
+    done = {}
 
     def plan(grid, start, goal, constraints, horizon):
         if constraints:
@@ -281,6 +286,11 @@ def make_authored_planner(fd_dir, llm, base, search="astar(lmcut())", stats=None
             return base(grid, start, goal, constraints, horizon)
 
         route = as_route(goal)
+        key = (tuple(map(tuple, grid.rows)), start, route, horizon)
+        if key in done:
+            seen["cached"] += 1
+            return done[key]
+
         first = prompt_for(grid, start, route, horizon)
         seen["problems"] += 1
         reply = fault = None
@@ -320,9 +330,12 @@ def make_authored_planner(fd_dir, llm, base, search="astar(lmcut())", stats=None
 
             seen["ok"] += 1
             seen["ok_first" if attempt == 1 else "ok_repair"] += 1
+            done[key] = path
             return path
 
-        return None if strict else base(grid, start, goal, constraints, horizon)
+        out = None if strict else base(grid, start, goal, constraints, horizon)
+        done[key] = out        # a failure is an answer too: do not buy it twice
+        return out
 
     return _Authored(plan, base, seen)
 

@@ -189,6 +189,29 @@ python3 pipeline_bench.py --authored --live --authored-attempts 2 --fd "$FD" --n
 Run the first one first. It uses the scripted author, costs nothing, and tells you what the
 configuration scores with a perfect stage 3; without it the live number cannot be read.
 
+Authored problems are cached on (grid, start, route, horizon), as `make_fd_planner` caches its
+own, because an agent that reappears in a later team would otherwise be paid for twice. In the
+composite run below that suppressed 52 of 67 calls.
+
+### Do the stages compose?
+
+Every stage above was measured on its own, one substitution at a time, which is what makes the
+comparisons readable. It is not the same as having run the pipeline. `--selector llm` and
+`--decomposer llm` fall back to scripted stand-ins when `--live` is absent, so the whole thing
+can be run at once for nothing:
+
+```bash
+python3 pipeline_bench.py --selector llm --decomposer llm --arbiter hybrid \
+  --ordering repair --authored --fd "$FD" --n 6 --strategies cheapest \
+  --size 4 --horizon 12 --walls 0.15 --out /tmp/composite.csv
+```
+
+This is an integration test, not an experiment: the stand-ins are not a model and say nothing
+about judgement. What it establishes is that the five stages run together and that the authored
+planner is indistinguishable from the compiled one when the author is perfect -- the same run
+with and without `--authored` is identical row for row. Three of this project's bugs lived in
+the seam between two features, which is why it exists.
+
 Create an output folder before writing to it (`mkdir -p results/new`). Ctrl+C is safe:
 finished instances are kept.
 
