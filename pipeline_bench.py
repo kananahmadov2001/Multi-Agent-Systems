@@ -177,7 +177,9 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
                                             attempts=authored_attempts)
         extra["planner"] = planner
     if arbiter != "cbs":
-        extra["solver"] = make_solver(arbiter, make_llm(), calls)
+        arb_llm = make_llm()
+        transcripts.append(arb_llm)     # the arbiter talks to a model as much as the other stages
+        extra["solver"] = make_solver(arbiter, arb_llm, calls)
     if ordering != "off":
         extra.update(ordering=ordering, max_ordering_repairs=ordering_repairs)
     if horizon:
@@ -206,9 +208,10 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         "llm_calls": (spent if (arbiter != "cbs" or selector == "llm" or decomposer == "llm")
                       else ""),
         "arbiter": arbiter,
-        "model": (os.environ.get("ARBITER_MODEL", "claude-haiku-4-5-20251001")
-                  if live else ("oracle" if (selector == "llm" or decomposer == "llm"
-                                             or arbiter != "cbs") else "")),
+        # from the objects that made the calls: AnthropicLLM and main() default to
+        # Sonnet while this line used to assume Haiku, so a run with ARBITER_MODEL
+        # unset would have been labelled with a model it never used
+        "model": ";".join(sorted({getattr(t, "model", "oracle") for t in transcripts})) or "",
         # the configuration that produced the row, so a result file is readable
         # without its filename
         "selector": selector,
