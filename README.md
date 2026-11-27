@@ -42,30 +42,30 @@ export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per ru
 
 | Command | What it checks |
 |---|---|
-| `python3 verify.py` | The independent plan checker (1 good plan, 7 bad plans rejected), and `verify_order`, which checks task order without sharing code with the detector that drives the repair |
-| `python3 cbs_baseline.py` | Approach 1: CBS, best-first and the depth-first ablation |
-| `python3 test_fd.py` | Approach 1 with Fast Downward as the low-level planner |
-| `python3 test_llm.py` | Approach 2 with fake LLMs |
-| `python3 test_hybrid.py` | Approach 3 with fake LLMs |
-| `python3 instances.py` | The hard test cases and their backtrack counts |
-| `python3 agent_pool.py` | Capability advertisement and tag matching |
-| `python3 selection.py` | The three selection policies and their ranked alternatives |
-| `python3 decompose.py` | Greedy, exhaustive and LLM decomposition |
-| `python3 pipeline.py` | The pipeline loop and the backtrack-to-selection edge |
-| `python3 pipeline_instances.py` | The capability-overlap domain |
-| `python3 colored_box.py` | The colored-box domain, where each agent sees a different grid |
-| `python3 check_fd_route.py` | The generated PDDL against `plan_route`, **without needing Fast Downward**. Add `--adversarial` or `--pipeline` |
-| `python3 control.py` | Approach 3's search with no LLM, on all 60 benchmark instances |
-| `python3 ordering.py` | Cross-agent task order: detection, bounded repair, and the release constraint |
-| `python3 check_edge.py` | Standard edge constraints against our stronger vertex rule |
-| `python3 check_edge_oracle.py` | Both conflict rules against brute force, so "stronger" can be priced |
-| `python3 hard_cbs.py` | Regenerates the hard set by how many nodes best-first CBS itself spends |
-| `python3 bench.py` | All three approaches on the hard cases with fake LLMs (harness only) |
+| `python3 -m mas.verify` | The independent plan checker (1 good plan, 7 bad plans rejected), and `verify_order`, which checks task order without sharing code with the detector that drives the repair |
+| `python3 -m mas.arbitration.cbs_baseline` | Approach 1: CBS, best-first and the depth-first ablation |
+| `python3 -m tests.test_fd` | Approach 1 with Fast Downward as the low-level planner |
+| `python3 -m tests.test_llm` | Approach 2 with fake LLMs |
+| `python3 -m tests.test_hybrid` | Approach 3 with fake LLMs |
+| `python3 -m mas.instances.instances` | The hard test cases and their backtrack counts |
+| `python3 -m mas.selection.agent_pool` | Capability advertisement and tag matching |
+| `python3 -m mas.selection.selection` | The three selection policies and their ranked alternatives |
+| `python3 -m mas.decomposition.decompose` | Greedy, exhaustive and LLM decomposition |
+| `python3 -m mas.pipeline` | The pipeline loop and the backtrack-to-selection edge |
+| `python3 -m mas.instances.pipeline_instances` | The capability-overlap domain |
+| `python3 -m mas.instances.colored_box` | The colored-box domain, where each agent sees a different grid |
+| `python3 -m checks.check_fd_route` | The generated PDDL against `plan_route`, **without needing Fast Downward**. Add `--adversarial` or `--pipeline` |
+| `python3 -m experiments.control` | Approach 3's search with no LLM, on all 60 benchmark instances |
+| `python3 -m mas.arbitration.ordering` | Cross-agent task order: detection, bounded repair, and the release constraint |
+| `python3 -m checks.check_edge` | Standard edge constraints against our stronger vertex rule |
+| `python3 -m checks.check_edge_oracle` | Both conflict rules against brute force, so "stronger" can be priced |
+| `python3 -m mas.instances.hard_cbs` | Regenerates the hard set by how many nodes best-first CBS itself spends |
+| `python3 -m experiments.bench` | All three approaches on the hard cases with fake LLMs (harness only) |
 
 One fuzz test, free, that needs neither Fast Downward nor a key:
 
 ```bash
-python3 fuzz_ordering.py --n 60 --sites 1 --oracle
+python3 -m checks.fuzz_ordering --n 60 --sites 1 --oracle
 ```
 
 Every instance the order repair gives up on is put to a brute-force joint oracle, which keeps
@@ -76,8 +76,8 @@ parts, where the same repair solves only about a third of the feasible instances
 Two diagnostics that need Fast Downward but no key:
 
 ```bash
-python3 probe_e2e.py --fd "$FD" --fake     # the whole pipeline, stage by stage
-python3 check_search.py --fd "$FD"         # does the search configuration change what we get back?
+python3 -m checks.probe_e2e --fd "$FD" --fake     # the whole pipeline, stage by stage
+python3 -m checks.check_search --fd "$FD"         # does the search configuration change what we get back?
 ```
 
 ## Benchmarks
@@ -90,9 +90,9 @@ python3 check_search.py --fd "$FD"         # does the search configuration chang
 or `--fakes`.
 
 ```bash
-python3 bench_fd.py --set sweep --fd "$FD" --out /tmp/check.csv        # free, Approach 1
-python3 bench_fd.py --set hard --fd "$FD" --live --out results/new/hard.csv --log results/new/hard.jsonl
-python3 analyze.py results/fd/hard_fd_haiku.csv results/fd/hard_fd_haiku.jsonl   # free: read a finished run
+python3 -m experiments.bench_fd --set sweep --fd "$FD" --out /tmp/check.csv        # free, Approach 1
+python3 -m experiments.bench_fd --set hard --fd "$FD" --live --out results/new/hard.csv --log results/new/hard.jsonl
+python3 -m experiments.analyze results/fd/hard_fd_haiku.csv results/fd/hard_fd_haiku.jsonl   # free: read a finished run
 ```
 
 `bench.py` takes `--conflicts vertex|standard` too, and there it applies to **all three**
@@ -121,12 +121,12 @@ code rather than the model.
 
 ```bash
 # free: deterministic, no API calls
-python3 pipeline_bench.py --fd "$FD" --out results/new/p.csv
-python3 pipeline_bench.py --fd "$FD" --k 3 --arbiter hybrid --out results/new/control.csv   # the no-LLM control
+python3 -m experiments.pipeline_bench --fd "$FD" --out results/new/p.csv
+python3 -m experiments.pipeline_bench --fd "$FD" --k 3 --arbiter hybrid --out results/new/control.csv   # the no-LLM control
 
 # costs money
-python3 pipeline_bench.py --fd "$FD" --k 3 --arbiter hybrid --live --out results/new/hybrid.csv
-python3 pipeline_bench.py --fd "$FD" --k 3 --arbiter llm --live --out results/new/llm.csv
+python3 -m experiments.pipeline_bench --fd "$FD" --k 3 --arbiter hybrid --live --out results/new/hybrid.csv
+python3 -m experiments.pipeline_bench --fd "$FD" --k 3 --arbiter llm --live --out results/new/llm.csv
 ```
 
 Options: `--domain capability|colored`, `--k N`, `--arbiter cbs|hybrid|llm`,
@@ -164,9 +164,9 @@ the harness generating it. Needs `--live` and a key; without it the checker runs
 reply. Results are printed, so redirect them.
 
 ```bash
-python3 authored_pddl.py --live --cases 20 > results/authored/single.txt
-python3 authored_pddl.py --live --cases 12 --routes > results/authored/routes.txt
-python3 authored_pddl.py --live --cases 20 --dump /tmp/replies.txt   # read a fault, don't guess it
+python3 -m mas.planning.authored_pddl --live --cases 20 > results/authored/single.txt
+python3 -m mas.planning.authored_pddl --live --cases 12 --routes > results/authored/routes.txt
+python3 -m mas.planning.authored_pddl --live --cases 20 --dump /tmp/replies.txt   # read a fault, don't guess it
 ```
 
 Options: `--cases N`, `--routes`, `--size N`, `--horizon N`, `--seed N`, `--dump FILE`, and
@@ -178,11 +178,11 @@ This measures one problem at a time. To run the same thing inside the pipeline, 
 agents must both succeed before arbitration can start, use `pipeline_bench.py --authored`:
 
 ```bash
-python3 pipeline_bench.py --authored --fd "$FD" --n 6 --strategies cheapest \
+python3 -m experiments.pipeline_bench --authored --fd "$FD" --n 6 --strategies cheapest \
   --size 4 --horizon 12 --walls 0.15 --out /tmp/ceiling.csv
 
 export ARBITER_MAX_TOKENS=32000
-python3 pipeline_bench.py --authored --live --authored-attempts 2 --fd "$FD" --n 6 \
+python3 -m experiments.pipeline_bench --authored --live --authored-attempts 2 --fd "$FD" --n 6 \
   --strategies cheapest --size 4 --horizon 12 --walls 0.15 --out /tmp/authored.csv
 ```
 
@@ -200,7 +200,7 @@ comparisons readable. It is not the same as having run the pipeline. Without `--
 `pipeline_bench.py` instead, so the whole thing can be run at once for nothing:
 
 ```bash
-python3 pipeline_bench.py --selector llm --decomposer llm --arbiter hybrid \
+python3 -m experiments.pipeline_bench --selector llm --decomposer llm --arbiter hybrid \
   --ordering repair --authored --fd "$FD" --n 6 --strategies cheapest \
   --size 4 --horizon 12 --walls 0.15 --out /tmp/composite.csv
 ```
@@ -211,7 +211,7 @@ about judgement. The same configuration with Haiku at all three stages is
 `.jsonl`:
 
 ```bash
-python3 pipeline_bench.py --selector llm --decomposer llm --arbiter hybrid \
+python3 -m experiments.pipeline_bench --selector llm --decomposer llm --arbiter hybrid \
   --ordering repair --live --out results/pipeline/pipeline_composite_live.csv \
   --log results/pipeline/pipeline_composite_live.jsonl
 ```
@@ -231,20 +231,40 @@ finished instances are kept.
 A run counts as solved only if `verify.py` — an independent replay of every plan, written
 without reference to the search code — accepts it.
 
-## Which file is which
+## Layout
 
-| Area | Files |
-|---|---|
-| Approach 1 (CBS, best-first; `solve` is the depth-first ablation) | `cbs_baseline.py`, `fd_planner.py`, `test_fd.py` |
-| Approach 2 (LLM, no tree) | `llm_arbitrator.py`, `test_llm.py` |
-| Approach 3 (LLM-guided CBS) | `hybrid.py`, `test_hybrid.py` |
-| Pipeline stages 1–2 | `agent_pool.py`, `selection.py`, `llm_select.py`, `decompose.py` |
-| Pipeline loop and domains | `pipeline.py`, `pipeline_instances.py`, `colored_box.py` |
-| Ordering conflicts | `ordering.py`, `verify.py` (`verify_order`), `fuzz_ordering.py` |
-| Evaluation | `instances.py`, `verify.py`, `bench.py`, `bench_fd.py`, `pipeline_bench.py`, `analyze.py`, `control.py` |
-| Diagnostics | `probe_e2e.py`, `check_fd_route.py`, `check_search.py`, `check_edge.py`, `check_edge_oracle.py`, `fuzz_ordering.py` |
-| Instance generation | `instances.py`, `hard_cbs.py` (the `hcb` set), `pipeline_instances.py` |
-| Agent-authored PDDL | `authored_pddl.py` |
+Folders follow the four pipeline stages, so a section of the paper maps to a directory.
+
+```
+mas/                 the system
+  selection/         stage 1: agent_pool, selection (3 heuristics), llm_select
+  decomposition/     stage 2: decompose (greedy, exhaustive, llm)
+  planning/          stage 3: fd_planner (compiled PDDL), authored_pddl (the agent writes it)
+  arbitration/       stage 4: cbs_baseline (Approach 1), llm_arbitrator (2), hybrid (3), ordering
+  instances/         the domains and their generators
+  pipeline.py        joins the stages, including the backtrack to selection
+  verify.py          the independent checker, stage 5
+experiments/         bench, bench_fd, pipeline_bench, control, analyze -- these write results/
+checks/              check_edge, check_edge_oracle, check_fd_route, check_search,
+                     fuzz_ordering, probe_e2e
+tests/               test_fd, test_hybrid, test_llm
+domains/             the hand-written PDDL from the midterm
+scripts/             the standalone conflict detector built for it
+results/             every committed run
+```
+
+Run anything as a module from the repo root, never as a path:
+
+```bash
+python3 -m mas.arbitration.ordering
+python3 -m experiments.bench --set hard --out /tmp/x.csv
+```
+
+Two things the layout does not say on its own. `cbs_baseline.py` is in `arbitration/`
+because it is Approach 1, but it also holds `Grid` and the space-time grid planner that
+nearly every other module imports; it is the one file worth reading first. And
+`checks/check_fd_route.py` is imported by `mas/planning/authored_pddl.py`, so `checks/`
+is not purely a leaf.
 
 ### One caveat on the live results
 
