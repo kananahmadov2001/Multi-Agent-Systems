@@ -60,6 +60,7 @@ export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per ru
 | `python3 -m mas.planning.fd_planner` | The PDDL encoding of vertex and edge bans, for single goals and routes, checked on the generated text. No Fast Downward needed |
 | `python3 -m mas.selection.llm_select` | The selection prompt and the team a reply is parsed into |
 | `python3 -m checks.check_authored` | Rebuilds the authored-PDDL cases from their seed and counts how many replies are exactly the compiled problem. Free, no Fast Downward |
+| `python3 -m checks.check_guidance` | Approach 3's node choices against the no-LLM control: how often the model disagreed, and whether any outcome changed. Free, no Fast Downward |
 | `python3 -m checks.check_refusals` | Re-reads the live composite transcript and checks every refused decomposition against the team's own advertisements |
 | `python3 -m checks.check_edge` | Standard edge constraints against our stronger vertex rule |
 | `python3 -m checks.check_edge_oracle` | Both conflict rules against brute force, so "stronger" can be priced. With 3 agents pass `--cap 20000`: at the default 2,000-node cap one case runs out of budget and is reported as a miss |
@@ -302,7 +303,8 @@ mas/                 the system
   verify.py          the independent checker, stage 5
 experiments/         bench, bench_fd, pipeline_bench, control, analyze -- these write results/
 checks/              check_authored, check_edge, check_edge_oracle, check_fd_route,
-                     check_refusals, check_search, fuzz_ordering, probe_e2e
+                     check_guidance, check_refusals, check_search, fuzz_ordering,
+                     probe_e2e
 tests/               test_fd, test_hybrid, test_llm
 domains/             the hand-written PDDL from the midterm
 scripts/             the standalone conflict detector built for it
@@ -418,11 +420,17 @@ every prompt and reply. Do not mix models in one table.
   Plan quality still separates them — on the hard set at 50 calls, 20.5 steps against 14.2
   averaged over what each solved, and 16.6 against 13.9 on the 17 instances both solved — so
   the claim that survives is about cost per conflict, not about solving more.
-- **LLM guidance adds nothing over the no-LLM control, under either constraint rule.** Under the
-  vertex rule Haiku's node choices never changed which instances Approach 3 solved. Under standard
-  edge constraints, live on the grid hard set (`results/haiku/hard_edge_haiku.csv`), it solves
-  the same 21 of 25 as the control with identical plan lengths and 450 nodes against 453; its
-  choices differ on 7 instances and change no outcome.
+- **LLM guidance adds nothing over the no-LLM control, under either constraint rule — and not
+  because the model agreed with it.** Under the vertex rule, across the 783 node choices in the
+  committed grid transcripts at a 50-call cap, Haiku picked something other than the cheapest
+  open node **172 times, 22% of its expansions**, with a per-instance rate as high as 46% on
+  hard6 — and solved the same 51 of 60 instances as a control that always takes the cheapest,
+  with not one outcome different. `checks/check_guidance.py` reports both halves, since a
+  matching solve count would prove nothing if the model had simply been answering "the
+  cheapest" all along. Under standard edge constraints, live on the grid hard set
+  (`results/haiku/hard_edge_haiku.csv`), it solves the same 21 of 25 as the control with
+  identical plan lengths and 450 nodes against 453; its choices differ on 7 instances and
+  change no outcome.
 - **With the LLM at every stage, decomposition is what breaks.** Live, the all-stages pipeline
   solves 7 of 20 against 13 with scripted stand-ins, and all 8 extra losses are at
   decomposition. All 19 refusals in the transcript were of teams whose own advertisements
