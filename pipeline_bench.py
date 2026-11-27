@@ -211,7 +211,10 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         # from the objects that made the calls: AnthropicLLM and main() default to
         # Sonnet while this line used to assume Haiku, so a run with ARBITER_MODEL
         # unset would have been labelled with a model it never used
-        "model": ";".join(sorted({getattr(t, "model", "oracle") for t in transcripts})) or "",
+        # "scripted" covers every stand-in: the Oracle answers selection and
+        # decomposition, FakeLLM answers the arbiter, and neither is a model
+        "model": ";".join(sorted({getattr(t, "model", None) or "scripted"
+                                  for t in transcripts})) or "",
         # the configuration that produced the row, so a result file is readable
         # without its filename
         "selector": selector,
