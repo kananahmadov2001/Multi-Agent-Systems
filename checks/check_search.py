@@ -17,8 +17,8 @@ Two separate questions, and the midterm conflated them:
 This asks the planner directly, with no CBS in the way, so neither answer can
 hide behind the search above it.
 
-    python3 check_search.py --fd /path/to/downward
-    python3 check_search.py --fd /path/to/downward --alt "lazy_greedy([cea()])"
+    python3 -m checks.check_search --fd /path/to/downward
+    python3 -m checks.check_search --fd /path/to/downward --alt "lazy_greedy([cea()])"
 """
 import argparse
 import random

@@ -9,7 +9,7 @@ Conflict types:
   edge    - two agents swap cells in the same step (a: x->y, b: y->x)
 
 Usage:
-  python detect_conflict.py problem-a1.pddl plan-a1.sol problem-a2.pddl plan-a2.sol [...]
+  python3 -m scripts.detect_conflict problem-a1.pddl plan-a1.sol problem-a2.pddl plan-a2.sol [...]
 
 Exit code: 0 = no conflict, 1 = at least one conflict, 2 = usage/parse error.
 """

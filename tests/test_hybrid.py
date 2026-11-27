@@ -1,7 +1,7 @@
 """
 Approach 3 tests (LLM-guided CBS: the LLM picks which open tree node to expand next).
-    python3 test_hybrid.py          fake LLMs only (free)
-    python3 test_hybrid.py --live   real model only (costs a few cents)
+    python3 -m tests.test_hybrid          fake LLMs only (free)
+    python3 -m tests.test_hybrid --live   real model only (costs a few cents)
 """
 import sys
 from mas.arbitration.cbs_baseline import Grid, show

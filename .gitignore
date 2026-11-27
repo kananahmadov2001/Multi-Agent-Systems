@@ -2,6 +2,7 @@
 __pycache__/
 
 # scratch / smoke-test outputs
+fd_work/
 haiku_check.*
 offline_new.csv
 results.csv

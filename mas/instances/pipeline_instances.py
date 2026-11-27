@@ -4,7 +4,7 @@ Agents differ in which tags they can serve and what they cost, and one may sit i
 a sealed pocket, so which team selection picks decides whether the grid instance
 can be planned at all. Standard library only.
 
-    python3 pipeline_instances.py       # self-check: prints a few instances
+    python3 -m mas.instances.pipeline_instances       # self-check: prints a few instances
 """
 import random
 

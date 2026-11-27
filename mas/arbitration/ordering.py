@@ -3,7 +3,7 @@
 Service times follow waypoint occurrences, not just cell visits. Repair delays the
 later part and is neither complete nor optimality-preserving. Standard library only.
 
-    python3 ordering.py       # self-check, no API calls
+    python3 -m mas.arbitration.ordering       # self-check, no API calls
 """
 from mas.arbitration.cbs_baseline import plan_single, solve_best_first
 from mas.verify import verify, verify_order

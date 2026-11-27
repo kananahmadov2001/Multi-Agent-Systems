@@ -1,8 +1,8 @@
 """
 Read bench results and transcripts. No API calls, free.
 
-    python3 analyze.py batch2.csv batch2.jsonl
-    python3 analyze.py var1.csv var1.jsonl
+    python3 -m experiments.analyze batch2.csv batch2.jsonl
+    python3 -m experiments.analyze var1.csv var1.jsonl
 
 Prints: (1) one row per instance and approach (all repeats combined), (2) plan length on the
 instances ALL approaches solved, including a "best of both fixed rules" baseline,
@@ -13,7 +13,7 @@ from collections import Counter
 from mas.arbitration.llm_arbitrator import parse_choice
 
 if len(sys.argv) != 3:
-    raise SystemExit("usage: python3 analyze.py RESULTS.csv TRANSCRIPTS.jsonl\n"
+    raise SystemExit("usage: python3 -m experiments.analyze RESULTS.csv TRANSCRIPTS.jsonl\n"
                      "  both come from a --live bench run with --out and --log")
 
 csv_path, log_path = sys.argv[1], sys.argv[2]

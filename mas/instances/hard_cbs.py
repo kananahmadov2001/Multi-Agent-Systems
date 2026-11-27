@@ -8,7 +8,7 @@ spends expansions on it, and the cost of conflict repair is reported directly.
 
 Standard library only.
 
-    python3 hard_cbs.py          # self-check, then the regenerated set
+    python3 -m mas.instances.hard_cbs          # self-check, then the regenerated set
 """
 import random
 

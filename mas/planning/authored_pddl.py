@@ -22,9 +22,9 @@ Two things get measured, and they pull in opposite directions:
                asks: authoring is testable at toy scale and runs out of output
                budget well before the 5x5, horizon-20 instances we benchmark.
 
-    python3 authored_pddl.py                      # free, scaffolding + size table
-    python3 authored_pddl.py --live --cases 8     # the real measurement
-    python3 authored_pddl.py --live --fd "$FD"    # also solve and replay each one
+    python3 -m mas.planning.authored_pddl                      # free, scaffolding + size table
+    python3 -m mas.planning.authored_pddl --live --cases 8     # the real measurement
+    python3 -m mas.planning.authored_pddl --live --fd "$FD"    # also solve and replay each one
 """
 import argparse
 import os

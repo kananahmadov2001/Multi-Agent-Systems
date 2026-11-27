@@ -3,7 +3,7 @@
 cheapest / greedy / coverage on the same AgentPool interface, each returning
 ranked alternatives for team-level backtracking. Standard library only.
 
-    python3 selection.py       # self-check: prints what each policy picks
+    python3 -m mas.selection.selection       # self-check: prints what each policy picks
 """
 from mas.selection.agent_pool import Agent, AgentPool, Task
 

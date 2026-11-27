@@ -4,7 +4,7 @@ Selection runs before decomposition, so every candidate team gets its own split.
 A team that cannot be reconciled is dropped and the next covering team is tried,
 which is the missing edge from Section 6. Standard library only.
 
-    python3 pipeline.py       # self-check: one solved run and each failure kind
+    python3 -m mas.pipeline       # self-check: one solved run and each failure kind
 """
 from mas.selection.agent_pool import Agent, AgentPool, Task
 from mas.selection.selection import select

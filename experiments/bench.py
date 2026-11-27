@@ -1,11 +1,11 @@
 """
 Compare the three approaches on the same instances.
 
-    python3 bench.py                                offline, hard set, fake LLM policies (checks the harness only)
-    python3 bench.py --live --limit 5               real model on the first 5 instances
-    python3 bench.py --live --start 25 --limit 8    real model on instances 25..32 (a new batch)
-    python3 bench.py --live --only pocket-5-mid --log transcripts.jsonl     one case, save every prompt and answer
-    python3 bench.py --live --only pocket-5-mid,hard3 --repeat 3            variance: 3 runs of each
+    python3 -m experiments.bench                                offline, hard set, fake LLM policies (checks the harness only)
+    python3 -m experiments.bench --live --limit 5               real model on the first 5 instances
+    python3 -m experiments.bench --live --start 25 --limit 8    real model on instances 25..32 (a new batch)
+    python3 -m experiments.bench --live --only pocket-5-mid --log transcripts.jsonl     one case, save every prompt and answer
+    python3 -m experiments.bench --live --only pocket-5-mid,hard3 --repeat 3            variance: 3 runs of each
 
 Options:
   --set easy|hard|all   which instances (default hard: 5 gadgets + 20 random = 25, numbered from 0)
@@ -74,6 +74,22 @@ def save_csv(rows, path):
     if rows:
         with open(path, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
+
+
+def guard_default_out(path, force):
+    """Make the folder, and refuse to replace a file already sitting at a default path.
+
+    The default output of bench_fd and pipeline_bench is a committed file under
+    results/. A --limit 3 smoke run therefore used to replace a full 25-instance
+    set without saying so, which is the kind of thing you discover when a number
+    in the paper stops matching the CSV it supposedly came from. Only runs that
+    did not name --out are stopped: naming the path is taken as meaning it.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    if os.path.exists(path) and not force:
+        raise SystemExit(f"{path} is already there, and this run would replace it.\n"
+                         "  --out PATH   write somewhere else\n"
+                         "  --force      replace it on purpose")
 
 
 def main():

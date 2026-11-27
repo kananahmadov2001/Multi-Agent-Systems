@@ -3,7 +3,7 @@
 It sees only each agent's advert, never capability tags, costs or start cells; a team that
 failed is never proposed twice. Standard library only.
 
-    python3 llm_select.py
+    python3 -m mas.selection.llm_select
 """
 import json
 from math import comb

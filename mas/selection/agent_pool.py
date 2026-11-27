@@ -6,7 +6,7 @@ teams). Adverts are read by a keyword table, not an LLM, so selection stays
 free and deterministic; replacing that with a model means changing `advertise`
 alone.
 
-    python3 agent_pool.py       # self-check: prints the pool and the teams
+    python3 -m mas.selection.agent_pool       # self-check: prints the pool and the teams
 """
 from itertools import combinations
 

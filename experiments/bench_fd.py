@@ -12,10 +12,10 @@ By default this runs Approach 1 only (CBS best-first), which is deterministic an
 free: no API calls. Approaches 2/3 need LLM calls, so they are opt-in -- --live for
 the real model (needs API budget) or --fakes for the $0 fake policies.
 
-    python bench_fd.py --set hard --only pocket-3,hard3      # Approach 1 only, $0
-    python bench_fd.py --set hard --limit 5                  # first 5 instances
-    python bench_fd.py --set hard --limit 5 --dfs            # add the depth-first ablations
-    python bench_fd.py --set hard --limit 5 --live           # also 2/3 (needs API budget)
+    python3 -m experiments.bench_fd --set hard --only pocket-3,hard3      # Approach 1 only, $0
+    python3 -m experiments.bench_fd --set hard --limit 5                  # first 5 instances
+    python3 -m experiments.bench_fd --set hard --limit 5 --dfs            # add the depth-first ablations
+    python3 -m experiments.bench_fd --set hard --limit 5 --live           # also 2/3 (needs API budget)
 
 Requires Fast Downward available. Locally that means Docker Desktop running with
 the `aibasel/downward` image tagged; pass --fd <dir> instead if you have a native
@@ -25,6 +25,9 @@ this is far slower than the grid run: start with --only or --limit. A run counts
 as solved only if verify.py accepts it, the same rule as bench.py.
 --fd-mode exec reuses one long-lived container instead of starting one per call,
 which removes about 0.5 s of container startup from each call.
+Without --out the results go to results/fd/fd_results.csv. A run that would replace
+a file already there stops instead: pass --out to write somewhere else, or --force
+to replace it on purpose.
 """
 import argparse, json, os, subprocess, time
 from mas.arbitration.cbs_baseline import solve, solve_best_first
@@ -35,9 +38,10 @@ from mas.instances.instances import gadgets, random_hard, random_plain, sweep
 from mas.verify import verify
 from mas.planning import fd_planner
 from mas.planning.fd_planner import make_fd_planner
-from experiments.bench import HORIZON, easy_instances, longest_path, save_csv, price_for
+from experiments.bench import (HORIZON, easy_instances, longest_path, save_csv, price_for,
+                               guard_default_out)
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FD_IMAGE = "aibasel/downward"
 
 
@@ -123,7 +127,9 @@ def main():
     ap.add_argument("--only", default=None)
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--log", default=None)
-    ap.add_argument("--out", default=os.path.join("results", "fd", "fd_results.csv"))
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--force", action="store_true",
+                    help="replace the default output file even though it is already there")
     ap.add_argument("--dfs", action="store_true")
     ap.add_argument("--fakes", action="store_true",
                     help="also run Approaches 2/3 with the $0 fake policies (off by default: they "
@@ -179,9 +185,9 @@ def main():
     # on the wrong grid. Intra-instance caching is kept: it is what makes a full CBS
     # expansion usually cost about one Fast Downward call rather than one per replan.
     if a.fd_mode == "exec":
-        work = os.path.join(HERE, a.fd_workdir)
+        work = os.path.join(ROOT, a.fd_workdir)
         os.makedirs(work, exist_ok=True)
-        ensure_fd_container(a.fd_container, HERE)
+        ensure_fd_container(a.fd_container, ROOT)
         make_planner = lambda: make_fd_planner_exec(a.fd_container, work,
                                                    f"/shared/{a.fd_workdir}", a.search)
     else:
@@ -230,7 +236,11 @@ def main():
                                                                    planner=planner)))
     labels = [x[0] for x in approaches]
 
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+    if a.out is None:
+        a.out = os.path.join(ROOT, "results", "fd", "fd_results.csv")
+        guard_default_out(a.out, a.force)
+    else:
+        os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
     rows, stopped, total_fd = [], None, 0
     logf = open(a.log, "w") if (a.log and a.live) else None
     try:

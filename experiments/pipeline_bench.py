@@ -6,9 +6,13 @@ midterm asks for: when the pipeline fails, was it selection or arbitration.
 own view and a covering team can still be unable to carry out its own split.
 Deterministic for a fixed --seed. Standard library only, no API calls.
 
-    python3 pipeline_bench.py                 # 20 instances, seed 7, all three strategies
-    python3 pipeline_bench.py --strategies cheapest --out results/pipeline/x.csv
-    python3 pipeline_bench.py --domain colored
+    python3 -m experiments.pipeline_bench                 # 20 instances, seed 7, all three strategies
+    python3 -m experiments.pipeline_bench --strategies cheapest --out results/pipeline/x.csv
+    python3 -m experiments.pipeline_bench --domain colored
+
+Without --out the name is built from the flags and written under results/pipeline/.
+A run that would replace a file already there stops instead: pass --out to write
+somewhere else, or --force to replace it on purpose.
 """
 import argparse
 import csv
@@ -24,9 +28,9 @@ from mas.selection.llm_select import propose_team
 from mas.pipeline import run_pipeline
 from mas.instances.pipeline_instances import capability_overlap
 from mas.selection.selection import POLICIES, Selection
+from experiments.bench import guard_default_out
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIELDS = ("instance", "selector", "decomposer", "planner", "ordering_mode",
           "sealed", "scarce", "strategy", "solved", "failure", "detail",
           "model", "teams_tried",
@@ -336,6 +340,8 @@ def main():
                     help="live only: save every prompt and reply as one JSON line per row. "
                          "The decomposition refusals are only auditable with this.")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--force", action="store_true",
+                    help="replace the default output file even though it is already there")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
 
@@ -388,7 +394,8 @@ def main():
         if a.selector == "llm" or a.decomposer == "llm":
             parts.append("llm")
         name = ("_".join(parts) if len(parts) > 1 else "pipeline_results") + ".csv"
-        a.out = os.path.join(HERE, "results", "pipeline", name)
+        a.out = os.path.join(ROOT, "results", "pipeline", name)
+        guard_default_out(a.out, a.force)
     build = colored_instances if a.domain == "colored" else capability_overlap
     insts = build(a.n, a.seed, size=a.size, walls=a.walls,
                   n_agents=a.agents, n_tags=a.tags, k=a.k, scarce=a.scarce)

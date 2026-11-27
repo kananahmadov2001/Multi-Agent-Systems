@@ -12,8 +12,8 @@ swap, and an agent that reaches its goal stops there and keeps occupying it
 (which is what cbs_baseline.pos_at does by padding). Cost is the sum of each
 agent's arrival time.
 
-    python3 check_edge_oracle.py
-    python3 check_edge_oracle.py --agents 3 --cases 300
+    python3 -m checks.check_edge_oracle
+    python3 -m checks.check_edge_oracle --agents 3 --cases 300
 """
 import argparse
 import heapq

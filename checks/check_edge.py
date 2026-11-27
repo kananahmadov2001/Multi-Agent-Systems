@@ -6,7 +6,7 @@ CBS ("standard"): each agent is forbidden that edge at that time. The default is
 stronger, so it can prune optimal solutions and is the reason the paper needs an
 optimality caveat. This measures how often the difference is visible.
 
-    python3 check_edge.py
+    python3 -m checks.check_edge
 """
 from mas.arbitration.cbs_baseline import find_conflict, plan_single, solve_best_first
 from mas.instances.hard_cbs import hard_by_search

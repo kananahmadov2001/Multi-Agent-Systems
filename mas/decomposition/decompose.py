@@ -24,7 +24,7 @@ silent fallback: if no valid reply arrives, the decomposition fails.
 
 Standard library only.
 
-    python3 decompose.py       # self-check, free (scripted fake LLMs)
+    python3 -m mas.decomposition.decompose       # self-check, free (scripted fake LLMs)
 """
 import json
 from itertools import product

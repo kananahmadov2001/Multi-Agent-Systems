@@ -1,7 +1,7 @@
 """
 Approach 2 tests. Default is OFFLINE with fake LLMs, so you can check the loop works.
-    python3 test_llm.py          fake LLMs only (free)
-    python3 test_llm.py --live   real model only (needs: pip install anthropic, ANTHROPIC_API_KEY)
+    python3 -m tests.test_llm          fake LLMs only (free)
+    python3 -m tests.test_llm --live   real model only (needs: pip install anthropic, ANTHROPIC_API_KEY)
 """
 import sys
 from mas.arbitration.cbs_baseline import Grid, show

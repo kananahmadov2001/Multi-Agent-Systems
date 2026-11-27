@@ -5,7 +5,7 @@ plan is the cheapest open node, which is needed to guarantee the shortest plan. 
 nodes without the LLM helping at all. This script runs Approach 3's exact search with a dumb "always take
 the cheapest open node" policy, so its node counts can be compared with the LLM's.
 
-    python3 control.py > control.txt
+    python3 -m experiments.control > control.txt
 """
 import re
 from mas.arbitration.cbs_baseline import solve_best_first

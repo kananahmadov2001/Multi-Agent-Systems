@@ -9,9 +9,9 @@ That isolates the encoding, which is the part most likely to be wrong, from
 Fast Downward, which already drives 360 verified benchmark rows. A pass here
 means any later disagreement is the planner or the harness, not the PDDL.
 
-    python3 check_fd_route.py                  # random cases, routes and single goals
-    python3 check_fd_route.py --pipeline       # the real pipeline's multi-site goals
-    python3 check_fd_route.py --adversarial    # constraints piled on the waypoints
+    python3 -m checks.check_fd_route                  # random cases, routes and single goals
+    python3 -m checks.check_fd_route --pipeline       # the real pipeline's multi-site goals
+    python3 -m checks.check_fd_route --adversarial    # constraints piled on the waypoints
 """
 import argparse
 import random

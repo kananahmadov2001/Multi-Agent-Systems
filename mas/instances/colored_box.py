@@ -5,7 +5,7 @@ palette is a wall to that agent. A covering team can therefore still be unable
 to carry out its own split, which is a decomposition failure, not a selection
 one. Standard library only.
 
-    python3 colored_box.py       # self-check: a blind split, then a team switch
+    python3 -m mas.instances.colored_box       # self-check: a blind split, then a team switch
 """
 import random
 

@@ -14,9 +14,9 @@ one instance with the real model, which is a handful of calls.
     export ANTHROPIC_API_KEY=...
     export ARBITER_MODEL=claude-haiku-4-5-20251001
     export ARBITER_MAX_CALLS=40
-    python3 probe_e2e.py --fd /path/to/downward
+    python3 -m checks.probe_e2e --fd /path/to/downward
 
-    python3 probe_e2e.py --fd /path/to/downward --fake   # stage B offline
+    python3 -m checks.probe_e2e --fd /path/to/downward --fake   # stage B offline
 """
 import argparse
 import traceback
