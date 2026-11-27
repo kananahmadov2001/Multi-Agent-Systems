@@ -348,7 +348,7 @@ measurement rather than a reproduction.
 | `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap. |
 | `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. |
 | `results/control/` | `control.txt`, the output of `control.py`, and `hard_edge_all.csv`: all three approaches on the hard set under standard edge constraints with the scripted policies, to be read against the vertex numbers in `results/haiku/`. |
-| `results/first_run_depth_first/` | **First run only, kept for the record.** Made with the earlier depth-first version of Approach 1 and a 1,500-token reply limit that cut some replies off. Do not mix with the tables above. |
+| `results/first_run_depth_first/` | **First run only, kept for the record.** `batch2`, `var1` and `results_live`, made with the earlier depth-first version of Approach 1 and a 1,500-token reply limit that cut some replies off. Do not mix with the tables above. |
 
 Each run has a `.csv` (one row per instance and approach) and, for live runs, a `.jsonl` with
 every prompt and reply. Do not mix models in one table.

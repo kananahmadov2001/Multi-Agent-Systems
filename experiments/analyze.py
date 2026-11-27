@@ -1,8 +1,12 @@
 """
 Read bench results and transcripts. No API calls, free.
 
-    python3 -m experiments.analyze batch2.csv batch2.jsonl
-    python3 -m experiments.analyze var1.csv var1.jsonl
+    python3 -m experiments.analyze results/fd/hard_fd_haiku.csv results/fd/hard_fd_haiku.jsonl
+    python3 -m experiments.analyze results/fd/random_fd_rep3.csv results/fd/random_fd_rep3.jsonl
+
+Paths are relative to the repo root, where you run it from. The earlier examples here
+named batch2 and var1 with no path; those live in results/first_run_depth_first/ and are
+the retracted depth-first run, so they are not what you want to read.
 
 Prints: (1) one row per instance and approach (all repeats combined), (2) plan length on the
 instances ALL approaches solved, including a "best of both fixed rules" baseline,
