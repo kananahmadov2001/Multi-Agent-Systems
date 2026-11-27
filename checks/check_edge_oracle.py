@@ -19,6 +19,7 @@ import argparse
 import heapq
 import itertools
 import random
+import sys
 
 from mas.arbitration.cbs_baseline import Grid, solve_best_first
 from mas.verify import verify
@@ -158,14 +159,15 @@ def main():
             print("       ", row)
         print("       ", agents)
     solvable = len(cases) - tally["no solution"]
-    if tally["std SUBOPTIMAL"] or tally["std MISSED"] or any("wrong" in b[0] for b in bad):
+    if bad:
         print("FAIL: standard mode is not behaving as complete and optimal CBS.")
-    else:
-        print(f"PASS: standard mode matched the brute-force optimum on all "
-              f"{solvable} solvable cases.")
-        print(f"      The stronger vertex rule was worse on {tally['vertex worse']} "
-              f"and missed {tally['vertex missed']} of them.")
+        return 1
+    print(f"PASS: standard mode matched the brute-force optimum on all "
+          f"{solvable} solvable cases.")
+    print(f"      The stronger vertex rule was worse on {tally['vertex worse']} "
+          f"and missed {tally['vertex missed']} of them.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

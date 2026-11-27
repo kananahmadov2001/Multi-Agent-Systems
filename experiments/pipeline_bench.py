@@ -310,8 +310,8 @@ def main():
                          "A satisficing configuration costs optimality, which is the point "
                          "of passing one")
     ap.add_argument("--authored", action="store_true",
-                    help="stage 3 as proposed: each agent writes its own PDDL problem "
-                         "file, which Fast Downward then solves. Needs --fd.")
+                    help="partial stage 3: each agent writes its first unconstrained PDDL "
+                         "problem; constrained replans use the compiled problem. Needs --fd.")
     ap.add_argument("--authored-attempts", type=int, default=1,
                     help="with --authored, re-ask this many times with the fault fed "
                          "back. 1 is one shot; 3 is the repair loop Smirnov et al. use")
@@ -325,15 +325,17 @@ def main():
                     help="use the real model. Without it a non-cbs arbiter runs on FakeLLM, "
                          "which costs nothing and checks the wiring first")
     ap.add_argument("--calls", type=int, default=50,
-                    help="per-instance call cap for the LLM arbiter")
+                    help="LLM-call cap per arbitration solve; team switches and ordering "
+                         "repair rounds each invoke the solver again")
     ap.add_argument("--selector", choices=("tag", "llm"), default="tag",
                     help="tag: the free capability policies; llm: the model reads the adverts "
-                         "and picks the team")
+                         "and picks the first team; later fallbacks stay deterministic")
     ap.add_argument("--decomposer", choices=("greedy", "llm"), default="greedy",
                     help="greedy: the free reference split; llm: the model, as the central "
                          "agent, splits the task over the selected team")
     ap.add_argument("--ordering", choices=("off", "check", "repair"), default="off",
-                    help="check cross-agent task order, or repair it with bounded grid-CBS search")
+                    help="check cross-agent task order, or repair it with bounded "
+                         "release-based replanning on either planner")
     ap.add_argument("--ordering-repairs", type=int, default=8,
                     help="maximum release constraints added by ordering repair")
     ap.add_argument("--log", default=None,

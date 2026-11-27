@@ -5,7 +5,8 @@ Two ways to walk the same constraint tree:
   solve(...)             depth-first with backtracking (the proposal's strategy table). Returns the
                          first conflict-free plan it reaches, so plans are not necessarily shortest.
   solve_best_first(...)  best-first: always expand the open node with the lowest total path cost,
-                         as in Sharon et al. 2015 (the proposal's Related Work). Optimal plans.
+                         as in Sharon et al. 2015 (the proposal's Related Work). Optimal within
+                         its constraint scheme, horizon and node cap.
 
 High level (this is the part we are testing):
   1. Every agent plans alone.

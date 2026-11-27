@@ -1,4 +1,4 @@
-"""Colored box: every agent plans on its own view of the grid.
+"""Colored cells: every agent plans on its own view of the grid.
 
 A cell may carry a colour and each agent has a palette; a cell outside the
 palette is a wall to that agent. A covering team can therefore still be unable
@@ -14,6 +14,7 @@ from mas.arbitration.cbs_baseline import Grid, plan_single, solve_best_first
 from mas.pipeline import greedy_decompose, run_pipeline
 from mas.instances.pipeline_instances import PipelineInstance, capability_overlap, reachable
 from mas.selection.selection import select
+from mas.verify import verify
 
 OPEN = "."
 WALL = "#"
@@ -64,6 +65,22 @@ def planner_for(cgrid, mapf, base=plan_single):
     return planner
 
 
+def verification_for(cgrid, base=verify):
+    """Independent spatial replay plus the per-agent palette rule."""
+
+    def check(grid, agents, paths):
+        ok, problems = base(grid, agents, paths)
+        if not ok:
+            return ok, problems
+        for name, path in sorted(paths.items()):
+            for t, cell in enumerate(path):
+                if not cgrid.sees(name, cell):
+                    return False, [f"{name} enters a cell outside its palette at t={t}: {cell}"]
+        return True, []
+
+    return check
+
+
 def blind_spots(cgrid, team, goals):
     """Agents that cannot reach one of their own waypoints through their view."""
     out = []
@@ -104,13 +121,13 @@ def colored_instances(n, seed, see=0.8, **kw):
 
 def run_colored(cgrid, pool, task, k, sites, strategy="cheapest", max_teams=3,
                 horizon=20, max_nodes=2000, planner=plan_single,
-                solver=solve_best_first, **kw):
+                solver=solve_best_first, checker=verify, **kw):
     """The pipeline, with each agent planning on its own coloured view.
 
     A split that lands a waypoint outside its owner's palette never reaches the
     solver: `sight_check` records it as a decomposition failure and the next
     covering team is tried, which is the switch edge under a per-agent model.
-    Everything else is run_pipeline; only the solver's planner and the precheck
+    Everything else is run_pipeline; only the solver's planner, precheck and verifier
     differ, so the hybrid and llm arbiters work here too - they take a planner.
     """
     def solve(grid, agents, **opts):
@@ -121,6 +138,7 @@ def run_colored(cgrid, pool, task, k, sites, strategy="cheapest", max_teams=3,
 
     return run_pipeline(cgrid, pool, task, k, sites, strategy=strategy, horizon=horizon,
                         max_nodes=max_nodes, max_teams=max_teams, solver=solve,
+                        checker=verification_for(cgrid, checker),
                         precheck=sight_check(cgrid), **kw)
 
 
@@ -174,6 +192,15 @@ def main():
     assert not cgrid.view("c1").free((2, 4)), "c1 should not see the coloured cell"
     assert cgrid.view("g1").free((2, 4)), "g1 has the palette for it"
     assert not cgrid.sees("c1", (2, 4)) and cgrid.sees("g1", (2, 4))
+
+    # The ordinary replay sees only real walls; the colored verifier must also
+    # reject a path through a cell its agent cannot see.
+    line = ColoredGrid([".1."], {"a": ""})
+    line_agents = {"a": ((0, 0), (0, 2))}
+    line_paths = {"a": [(0, 0), (0, 1), (0, 2)]}
+    assert verify(line, line_agents, line_paths)[0]
+    ok, why = verification_for(line)(line, line_agents, line_paths)
+    assert not ok and "outside its palette" in why[0]
 
     chosen = select(pool, task, 2)
     print(f"\nselection: {chosen.names} cost={chosen.cost} ok={chosen.ok}")

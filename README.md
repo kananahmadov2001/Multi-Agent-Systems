@@ -51,7 +51,7 @@ export ARBITER_MAX_CALLS=4000
 | `python3 -m mas.decomposition.decompose` | Greedy, exhaustive and LLM decomposition |
 | `python3 -m mas.pipeline` | The pipeline loop and the backtrack-to-selection edge |
 | `python3 -m mas.instances.pipeline_instances` | The capability-overlap domain |
-| `python3 -m mas.instances.colored_box` | The colored-box domain, where each agent sees a different grid |
+| `python3 -m mas.instances.colored_box` | The colored-cell visibility domain, where each agent sees a different grid |
 | `python3 -m checks.check_fd_route` | The generated PDDL against `plan_route`, **without needing Fast Downward**. Add `--adversarial` or `--pipeline` |
 | `python3 -m experiments.control` | Approach 3's search with no LLM, on all 60 benchmark instances |
 | `python3 -m mas.arbitration.ordering` | Cross-agent task order: detection, bounded repair, the release constraint, and `verify_order`, which checks order without sharing code with the detector that drives the repair |
@@ -144,18 +144,27 @@ Options: `--domain capability|colored`, `--n N`, `--seed N`, `--strategies LIST`
 `--agents N`, `--tags N`, `--scarce`, `--size N`, `--walls F`, `--horizon N`,
 `--search CONFIG`, `--fd DIR`, `--log FILE`, `--out FILE`, `--force`, `--quiet`.
 
-`--ordering check` adds cross-agent task order to verification; `--ordering repair` also tries
-to fix violations by delaying the later part. Both are free and deterministic, and both work
-on either low-level planner and with any arbiter. Ordering sits outside the arbiter, so the
-LLM never sees an ordering conflict even under `--live`.
+`--ordering check` adds cross-agent task order to verification and independently replays it
+with `verify_order`; `--ordering repair` also tries to fix violations by delaying the later
+part. Both are free and deterministic, and both work on either low-level planner and with any
+arbiter. Ordering sits outside the arbiter, so the LLM never sees an ordering conflict even
+under `--live`.
 
-`--authored` replaces the compiled problem file with one the agent writes itself: stage 3 as
-the proposal describes it. It needs `--fd`, since Fast Downward solves whatever the agent
-produces. Without `--live` a scripted author stands in, which costs nothing and establishes
-the ceiling for a given configuration. `--authored-attempts N` re-asks up to N times with the
-fault fed back, the repair loop of Smirnov et al.; the default of 1 is one shot.
-`--authored-lenient` falls back to the compiled problem when authoring fails, which measures
-authoring quality without letting a bad problem decide the run.
+Ordering is opt-in (`off` by default). `Task.from_text` reads capability tags, not temporal
+language: a temporal requirement must be supplied explicitly as `Task(..., order=...)`.
+Selection and decomposition are also deterministic by default. `--selector llm` chooses only
+the first team; later fallback teams are deterministic. Team switching is bounded by
+`--max-teams` (3 by default), with one decomposition attempted per team. `--calls` is a cap
+per arbitration solve, not a whole-instance cap across team switches or ordering rounds.
+
+`--authored` is a partial version of the proposal's stage 3: each agent writes only its first,
+unconstrained problem file. Every constrained replan uses the compiled problem. It needs
+`--fd`, since Fast Downward solves whatever the agent produces. Without `--live` a scripted
+author stands in, which costs nothing and establishes the ceiling for a given configuration.
+`--authored-attempts N` re-asks up to N times with the fault fed back, the repair loop of
+Smirnov et al.; the default of 1 is one shot. `--authored-lenient` falls back to the compiled
+problem when authoring fails, which measures authoring quality without letting a bad problem
+decide the run.
 
 `--horizon N` matters for `--authored`: the time-expanded encoding grows with it, and at the
 default 5x5 horizon 20 a two-site route problem is about 51k output tokens, beyond what a
@@ -172,9 +181,9 @@ overrides), but a named file is still what you want.
 
 ### Agent-authored PDDL (`authored_pddl.py`)
 
-The proposal's version of the low-level step: the agent writes its own problem file instead of
-the harness generating it. Needs `--live` and a key; without it the checker runs on a canned
-reply. Results are printed, so redirect them.
+A standalone measurement of the proposal's authoring step: the agent writes one problem file
+instead of the harness generating it. Needs `--live` and a key; without it the checker runs on
+a canned reply. Results are printed, so redirect them.
 
 ```bash
 python3 -m mas.planning.authored_pddl --live --cases 20 > results/authored/single.txt
@@ -184,8 +193,9 @@ python3 -m mas.planning.authored_pddl --live --cases 20 --dump /tmp/replies.txt 
 
 Options: `--cases N`, `--routes`, `--size N`, `--horizon N`, `--seed N`, `--dump FILE`, and
 `--fd DIR` to also solve each authored problem for real rather than only checking its shape.
-A 5x5 grid at horizon 20 needs roughly 15k output tokens, so raise `ARBITER_MAX_TOKENS` before
-a routes run or the replies are cut off mid-problem.
+A 5x5 single-goal problem at horizon 20 needs roughly 15k output tokens; a two-site route at
+that size needs about 51k. Raise `ARBITER_MAX_TOKENS` before a routes run or the replies are
+cut off mid-problem.
 
 This measures one problem at a time. To run the same thing inside the pipeline, where two
 agents must both succeed before arbitration can start, use `pipeline_bench.py --authored`:
@@ -281,8 +291,11 @@ model.
 Create an output folder before writing to it (`mkdir -p results/new`). Ctrl+C is safe:
 finished instances are kept.
 
-A run counts as solved only if `verify.py` — an independent replay of every plan, written
-without reference to the search code — accepts it.
+Current benchmark paths count a plan as solved only after `verify.py` — an independent replay
+written without reference to the search code — accepts it. The no-LLM control uses the same
+check. Colored runs additionally check each agent's palette, and both ordering modes use the
+independent `verify_order` replay. This describes the current code; older artifacts without
+transcripts or current metadata remain limited evidence.
 
 ## Layout
 
@@ -333,23 +346,33 @@ answer a reworded prompt identically. Any new live run therefore belongs in its 
 appended to a table of the old ones, and a live rerun of an old configuration is a fresh
 measurement rather than a reproduction.
 
+### Scope relative to the proposal and midterm
+
+The code implements the capability pipeline and cell/swap/ordering conflicts, but not shared
+consumable tools or general non-spatial resource conflicts. The colored domain is a
+colored-cell visibility abstraction, not the proposal's box-moving domain. Agent-authored PDDL
+is partial as described above, and team switching is bounded. Bulk live results use Haiku;
+Sonnet remains a two-instance spot check, not a full run. These are scope limits to state in
+the paper and presentation, not completed features.
+
 ## Results folder
 
 | Folder | What it holds |
 |---|---|
 | `results/fd/` | The main arbitration runs, Fast Downward as the low-level planner: `*_fd_haiku` (the headline runs on all three sets), `random_fd_rep3` (3 repeats), `hard_fd_sat` (satisficing search), `*_fd_equal20` and `*_fd_equal50` (both LLM approaches at the same call cap), `*_fd_edge` (`--conflicts standard`, Approach 1 only), and `hcb_fd_cbs` / `hcb_fd_equal50` / `hcb_fd_edge` (the CBS-regenerated hard set), and `hard_fd_edge_all` (all three approaches under edge constraints, scripted policies). `fd_results`, `fd_random` and `fd_sweep` are the first Fast Downward runs, Approach 1 only; their numbers are reproduced exactly by the CBS rows of the matching `*_fd_haiku` file, so prefer those. |
-| `results/pipeline/` | Pipeline runs: `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_fd_llmselect` and `pipeline_fd_llmdecomp` (an LLM in place of the selection and decomposition heuristics), `pipeline_colored*`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). Every pipeline CSV carries a `detail` column saying why the last attempt ended, so a capped arbitration failure is distinguishable from an exhausted one; measured, no committed configuration fails on the node cap. |
+| `results/pipeline/` | Pipeline runs: `pipeline_results` (grid planner), `pipeline_fd` (PDDL), `pipeline_fd_hybrid` and `pipeline_fd_hybrid_fake` (LLM arbitration and its control), `pipeline_fd_llmselect` and `pipeline_fd_llmdecomp` (an LLM in place of the selection and decomposition heuristics), `pipeline_colored*`, the `k1`/`k2`/`k3` team-size sweep, and `pipeline_k3_fd_*` (all four arbiters on the conflict-dense configuration). Newer pipeline CSVs carry a `detail` column saying why the last attempt ended; older files predate that field. No committed configuration has a measured node-cap failure. |
 | `results/pipeline/pipeline_composite*` | The all-stages configuration, 20 instances at one strategy. `_composite` uses the scripted stand-ins (13/20); `_composite_live` puts Haiku at selection, decomposition and arbitration (7/20), with every prompt and reply in `_composite_live.jsonl`. `_composite_authored_4x4` is the separate 6-instance variant that also authors its PDDL, at 4x4 and horizon 12 where a problem still fits in one reply (3/6); it predates the `--log` option, so it has no transcript and no model column. |
 | `results/ordering/` | `pipeline_order_check` and `pipeline_order_repair` (grid planner), `pipeline_order_check_fd` and `pipeline_order_repair_fd` (Fast Downward). Both planners give 21/60 under checking and 39 against 42 under repair. Read against `results/pipeline/pipeline_results.csv` and `pipeline_fd.csv` (44/60 each), the same configuration with ordering off. |
 | `results/authored/` | `single`, `single_summary`, `routes` are `.txt`: one problem at a time, standalone. `pipeline_authored_4x4*.csv` are the in-pipeline runs at 4x4 horizon 12 -- `_compiled` is the scripted-author ceiling, the other two are one shot and one repair round. |
 | `results/haiku/` | Earlier arbitration runs on our own grid planner, kept so the PDDL numbers can be compared against them, and `hard_edge_haiku`: the live Haiku run of all three approaches on the hard set under standard edge constraints, to be read against `results/control/hard_edge_all.csv`. |
-| `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap. |
+| `results/haiku_cap150/` | Re-run of six of the nine Approach-3 losses at the 50-call cap: hard3, hard15, hard18, r2, r13 and a2-2, with a 150-call cap. |
 | `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. |
 | `results/control/` | `control.txt`, the output of `control.py`, and `hard_edge_all.csv`: all three approaches on the hard set under standard edge constraints with the scripted policies, to be read against the vertex numbers in `results/haiku/`. |
 | `results/first_run_depth_first/` | **First run only, kept for the record.** `batch2`, `var1` and `results_live`, made with the earlier depth-first version of Approach 1 and a 1,500-token reply limit that cut some replies off. Do not mix with the tables above. |
 
-Each run has a `.csv` (one row per instance and approach) and, for live runs, a `.jsonl` with
-every prompt and reply. Do not mix models in one table.
+Each run has a `.csv` (one row per instance and approach). New live runs should also have a
+`.jsonl` with every prompt and reply; some older live artifacts predate `--log` and do not.
+Do not mix models in one table.
 
 ---
 
@@ -600,8 +623,9 @@ with the absolute path, e.g. `c:\CSE5106\Multi-Agent-Systems`.
   (set `$FD` once and pass `--fd "$FD"`); only `tests.test_fd` falls back
   to `../fast-downward-24.06.1/`, relative to where you run it, and takes
   the directory as its first argument instead. Pass the path rather than
-  committing a path change. On Windows, `experiments.bench_fd` can drive
-  the `aibasel/downward` container itself (`--fd-mode run|exec`); for the
+  committing a path change. On Windows, `experiments.bench_fd --fd-mode exec` drives
+  the `aibasel/downward` container itself; `--fd-mode run` executes the local
+  Fast Downward Python wrapper. For the
   hand-written PDDL, mount the folder at `/shared` as shown above.
 
 Bulk runs use Claude Haiku 4.5 (`ARBITER_MODEL=claude-haiku-4-5-20251001`), which is about

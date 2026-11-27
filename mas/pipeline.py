@@ -9,7 +9,7 @@ which is the missing edge from Section 6. Standard library only.
 from mas.selection.agent_pool import Agent, AgentPool, Task
 from mas.selection.selection import select
 from mas.arbitration.cbs_baseline import Grid, plan_single, solve_best_first
-from mas.verify import verify
+from mas.verify import verify, verify_order
 from mas.decomposition.decompose import greedy_decompose
 from mas.arbitration.ordering import describe_conflict, ordering_conflicts, solve_ordered
 
@@ -167,7 +167,7 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
         if paths is None:
             why = stats.get("ordering_error")
             if not why:
-                why = "hit the node cap" if stats["hit_limit"] else "no conflict-free plan"
+                why = "hit a solver limit" if stats["hit_limit"] else "no conflict-free plan"
             attempts.append(Attempt(names, "arbitration", why, goals=goals, stats=stats,
                                     assignment=assignment))
             continue
@@ -183,6 +183,9 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
             if ordering == "check":
                 stats.update(ordering_conflicts=len(conflicts), ordering_repairs=0,
                              ordering_rounds=1)
+                ok, independent = verify_order(mapf, paths, task, assignment)
+                if not ok:
+                    order_problems = independent + order_problems
             if order_problems or conflicts:
                 why = (order_problems[0] if order_problems else
                        "ordering repair returned an invalid plan" if ordering == "repair" else
@@ -311,6 +314,21 @@ def main():
     dropped = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
                            planner=drops_releases, ordering="repair")
     assert not dropped.ok, "a planner that ignores releases must not appear to succeed"
+
+    # Check mode also uses the independent order verifier, even if the detector
+    # that drives repair wrongly reports no problem.
+    from unittest.mock import patch
+    with (patch(f"{__name__}.ordering_conflicts", return_value=([], [])),
+          patch(f"{__name__}.verify_order", return_value=(False, ["independent order failure"]))):
+        independently_checked = run_pipeline(order_grid, ordered_pool, ordered_task, 2,
+                                             order_sites, ordering="check")
+    assert not independently_checked.ok
+    assert independently_checked.detail == "independent order failure", independently_checked.attempts
+
+    # A solver limit is not necessarily a node cap: LLM approaches also have call caps.
+    limited = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,
+                           solver=lambda *a, **kw: (None, {"hit_limit": True}))
+    assert limited.failure == "arbitration" and limited.detail == "hit a solver limit"
 
     # a solver that returns nothing is an arbitration failure, not a crash
     none_solver = run_pipeline(order_grid, ordered_pool, ordered_task, 2, order_sites,

@@ -203,6 +203,7 @@ def main():
             print("\n  suboptimal solves: 0")
     print("\n" + ("SOUND: never returned a plan that breaks the order or collides"
                   if unsound == 0 else "UNSOUND — see above"))
+    return 1 if unsound else 0
 
 
 if __name__ == "__main__":

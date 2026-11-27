@@ -70,7 +70,8 @@ for a in cols:
     v = [steps_by[(a, i)] for i in common]
     if v:
         print(f"  {short(a) if a != best_name else best_name:<18} average steps {mean(v):.1f}")
-print("  CBS-bf = best-first CBS: the shortest possible plan. The LLM approaches cannot beat it on plan length."
+print("  CBS-bf = best-first CBS: optimal within its constraint scheme, horizon and node cap. "
+      "Use standard edge constraints for the usual CBS optimality claim."
       + ("\n  best-of-both = run both depth-first rules, keep the shorter plan (old result files only)." if len(fixed) >= 2 else ""))
 
 # by number of agents (difficulty), when the file has more than one group
