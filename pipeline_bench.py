@@ -29,7 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "results", "pipeline", "pipeline_results.csv")
 FIELDS = ("instance", "selector", "decomposer", "planner", "ordering_mode",
           "sealed", "scarce", "strategy", "solved", "failure", "detail",
-          "teams_tried",
+          "model", "teams_tried",
           "team", "team_cost", "steps", "nodes", "fd_calls", "llm_calls", "arbiter")
 ORDER_FIELDS = ("ordering", "ordering_conflicts", "ordering_repairs", "ordering_rounds")
 AUTHORED_FIELDS = ("authored_problems", "authored_calls", "authored_cached", "authored_ok",
@@ -140,7 +140,7 @@ def make_solver(arbiter, llm, calls):
 
 
 def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
-        arbiter="cbs", make_llm=None, calls=50, selector="tag", decomposer="greedy",
+        arbiter="cbs", make_llm=None, calls=50, selector="tag", decomposer="greedy", logf=None,
         live=False, ordering="off", ordering_repairs=8, authored=False,
         authored_strict=True, horizon=None, authored_attempts=1):
     """One instance under one strategy, as a CSV row.
@@ -153,8 +153,10 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
     """
     run = run_colored if domain == "colored" else run_pipeline
     extra, planner, stats = {}, None, {}
+    transcripts = []        # every model this row spoke to, so replies can be audited
     if selector == "llm" or decomposer == "llm":
         llm = AnthropicLLM() if live else Oracle(inst, k)
+        transcripts.append(llm)
         if selector == "llm":
             extra["selector"] = llm_selector(llm, stats)
         if decomposer == "llm":
@@ -167,7 +169,9 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
             # file, Fast Downward solves it. The compiled planner stays as the
             # fallback for constrained replans, which the prompt cannot express.
             from authored_pddl import make_authored_planner
-            planner = make_authored_planner(fd, AnthropicLLM() if live else canned_author(),
+            author = AnthropicLLM() if live else canned_author()
+            transcripts.append(author)
+            planner = make_authored_planner(fd, author,
                                             planner, search=search or "astar(lmcut())",
                                             stats=stats, strict=authored_strict,
                                             attempts=authored_attempts)
@@ -202,6 +206,9 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         "llm_calls": (spent if (arbiter != "cbs" or selector == "llm" or decomposer == "llm")
                       else ""),
         "arbiter": arbiter,
+        "model": (os.environ.get("ARBITER_MODEL", "claude-haiku-4-5-20251001")
+                  if live else ("oracle" if (selector == "llm" or decomposer == "llm"
+                                             or arbiter != "cbs") else "")),
         # the configuration that produced the row, so a result file is readable
         # without its filename
         "selector": selector,
@@ -209,6 +216,14 @@ def one(inst, k, strategy, max_teams, domain="capability", fd=None, search=None,
         "planner": ("authored+fd" if authored else "fd" if fd else "grid"),
         "ordering_mode": ordering,
     }
+    if logf is not None:
+        for llm_used in transcripts:
+            log = getattr(llm_used, "log", None)
+            if log:
+                logf.write(json.dumps({"instance": inst.name, "strategy": strategy,
+                                       "model": row["model"], "calls": log}) + "\n")
+        logf.flush()
+
     if authored:
         wrote = stats.get("authored", {})
         row.update(authored_problems=wrote.get("problems", 0),
@@ -242,6 +257,20 @@ def summary(rows, strategies):
         lines.append(f"  {s}: solved {sum(r['solved'] for r in mine)}/{len(mine)}, "
                      f"needed a team switch {switched}")
     return "\n".join(lines)
+
+
+def write_rows(a, rows):
+    """Save what exists so far. A live run can stop on the global call cap, and
+    losing rows already paid for is the one outcome worth engineering against."""
+    if not rows:
+        return
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
+    fields = (FIELDS + (ORDER_FIELDS if a.ordering != "off" else ())
+              + (AUTHORED_FIELDS if a.authored else ()))
+    with open(a.out, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(rows)
 
 
 def main():
@@ -297,6 +326,9 @@ def main():
                     help="check cross-agent task order, or repair it with bounded grid-CBS search")
     ap.add_argument("--ordering-repairs", type=int, default=8,
                     help="maximum release constraints added by ordering repair")
+    ap.add_argument("--log", default=None,
+                    help="live only: save every prompt and reply as one JSON line per row. "
+                         "The decomposition refusals are only auditable with this.")
     ap.add_argument("--out", default=None)
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
@@ -359,10 +391,12 @@ def main():
     if len(insts) < a.n:
         print(f"note: only {len(insts)} of {a.n} requested instances were feasible")
 
-    rows = []
-    for inst in insts:
-        for strategy in strategies:
-            row = one(inst, a.k, strategy, a.max_teams, a.domain, fd=a.fd, search=a.search,
+    rows, stopped = [], None
+    logf = open(a.log, "w") if (a.log and a.live) else None
+    try:
+        for inst in insts:
+          for strategy in strategies:
+            row = one(inst, a.k, strategy, a.max_teams, a.domain, fd=a.fd, search=a.search, logf=logf,
                       authored=a.authored, authored_strict=not a.authored_lenient,
                       horizon=a.horizon, authored_attempts=a.authored_attempts,
                       arbiter=a.arbiter, make_llm=make_llm, calls=a.calls,
@@ -373,6 +407,16 @@ def main():
                 end = "solved" if row["solved"] else row["failure"]
                 print(f"{row['instance']:<6} {strategy:<9} {end:<14} teams={row['teams_tried']} "
                       f"team={row['team'] or '-'} steps={row['steps'] or '-'}")
+          write_rows(a, rows)      # after each instance: a live run can hit the call cap
+    except RuntimeError as e:      # the global call cap
+        stopped = str(e)
+    except KeyboardInterrupt:
+        stopped = "interrupted with Ctrl+C"
+    finally:
+        if logf:
+            logf.close()
+    if not rows:
+        raise SystemExit(f"nothing finished: {stopped}" if stopped else "no instances")
 
     # A row must be internally consistent: solved rows have a plan, failed ones do not.
     for r in rows:
@@ -386,15 +430,12 @@ def main():
             assert r["failure"] in OUTCOMES[1:], r
             assert r["team"] == "" and r["steps"] == "", r
 
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    with open(a.out, "w", newline="", encoding="utf-8") as f:
-        fields = (FIELDS + (ORDER_FIELDS if a.ordering != "off" else ())
-                  + (AUTHORED_FIELDS if a.authored else ()))
-        writer = csv.DictWriter(f, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
+    write_rows(a, rows)
 
     print()
+    if stopped:
+        print(f"STOPPED EARLY: {stopped}")
+        print(f"{len(rows)} row(s) finished and saved to {a.out}.\n")
     print(summary(rows, strategies))
     if a.arbiter != "cbs":
         spent = sum(int(r["llm_calls"] or 0) for r in rows)

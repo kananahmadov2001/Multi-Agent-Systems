@@ -1,21 +1,21 @@
-instance,selector,decomposer,planner,ordering_mode,sealed,scarce,strategy,solved,failure,detail,teams_tried,team,team_cost,steps,nodes,fd_calls,llm_calls,arbiter,ordering,ordering_conflicts,ordering_repairs,ordering_rounds
-co1,llm,llm,grid,repair,-,1,llm,0,selection,does not cover ['inspect'],1,,,,,,1,hybrid,repair,0,0,0
-co2,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: No agent on the team can fly over walls; a3 can inspect rooms and a2 can carry crates, but neither description includes flying capability.",3,,,,,,4,hybrid,repair,0,0,0
-co3,llm,llm,grid,repair,-,0,llm,1,,,2,a4;a6,4.1,21,1,,4,hybrid,repair,1,1,2
-co4,llm,llm,grid,repair,a1,0,llm,1,,,1,a2;a3,3.8,10,0,,2,hybrid,repair,0,0,1
-co5,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: No agent on the team can carry crates since a2 only inspects and walks, and a5 cannot reach (3,3) to carry crates while also completing the inspect part at (3,1) in the correct task order.",3,,,,,,12,hybrid,repair,9,8,9
-co6,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: No agent can fly over walls; a4 flies but cannot inspect or carry, and a5 can inspect and carry but cannot fly.",3,,,,,,4,hybrid,repair,0,0,1
-co7,llm,llm,grid,repair,-,1,llm,0,selection,does not cover ['move'],1,,,,,,1,hybrid,repair,0,0,0
-co8,llm,llm,grid,repair,a1,0,llm,1,,,1,a5;a6,3.6,19,0,,2,hybrid,repair,1,1,2
-co9,llm,llm,grid,repair,-,0,llm,0,arbitration,no conflict-free plan,3,,,,,,4,hybrid,repair,0,0,1
-co10,llm,llm,grid,repair,-,1,llm,0,selection,does not cover ['inspect'],1,,,,,,1,hybrid,repair,0,0,0
-co11,llm,llm,grid,repair,-,1,llm,0,selection,does not cover ['fly'],1,,,,,,1,hybrid,repair,0,0,0
-co12,llm,llm,grid,repair,a1,0,llm,0,decomposition,"llm declared the team cannot do the task: Agent a5 can inspect and move but cannot carry crates, and agent a3 can only carry crates but cannot inspect rooms or walk around the grid as described in the task.",3,,,,,,4,hybrid,repair,0,0,0
-co13,llm,llm,grid,repair,-,0,llm,1,,,3,a1;a6,4.1,25,2,,5,hybrid,repair,1,1,4
-co14,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: Agent a6 can fly to do the fly part, and a4 can inspect rooms, but no agent can carry crates since a6 cannot carry and a4 cannot fly over walls to reach the carry location at (4,0) which is blocked by the wall structure.",1,,,,,,2,hybrid,repair,0,0,0
-co15,llm,llm,grid,repair,-,0,llm,1,,,1,a3;a5,4.5,10,0,,2,hybrid,repair,0,0,1
-co16,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: Agent a1 cannot carry crates (only inspects and walks), and agent a5 cannot inspect rooms (only carries crates), so the carry part at (3,1) cannot be assigned to an agent capable of both carrying and inspecting as required by task order.",1,,,,,,2,hybrid,repair,0,0,0
-co17,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: Part 'move' at cell (3, 0) requires walking around the grid, but a6 (the walker) starts at (4, 1) and cannot reach (3, 0) in the required task order after a2 completes the earlier parts.",2,,,,,,33,hybrid,repair,9,8,9
-co18,llm,llm,grid,repair,-,0,llm,1,,,1,a1;a2,5.0,17,1,,2,hybrid,repair,1,1,2
-co19,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: Agent a6 can carry crates and move to (4,4) and (0,4), but only a5 flies and cannot carry crates, so the carry part at (4,4) cannot be assigned to any agent.",2,,,,,,3,hybrid,repair,0,0,0
-co20,llm,llm,grid,repair,-,0,llm,1,,,1,a1;a2,5.5,23,2,,2,hybrid,repair,1,1,2
+instance,selector,decomposer,planner,ordering_mode,sealed,scarce,strategy,solved,failure,detail,model,teams_tried,team,team_cost,steps,nodes,fd_calls,llm_calls,arbiter,ordering,ordering_conflicts,ordering_repairs,ordering_rounds
+co1,llm,llm,grid,repair,-,1,llm,0,selection,does not cover ['inspect'],claude-haiku-4-5-20251001,1,,,,,,1,hybrid,repair,0,0,0
+co2,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: No agent on the team can fly over walls; a3 can inspect rooms and a2 can carry crates, but neither description includes flying capability.",claude-haiku-4-5-20251001,3,,,,,,4,hybrid,repair,0,0,0
+co3,llm,llm,grid,repair,-,0,llm,1,,,claude-haiku-4-5-20251001,1,a2;a6,4.2,22,5,,5,hybrid,repair,2,2,3
+co4,llm,llm,grid,repair,a1,0,llm,1,,,claude-haiku-4-5-20251001,1,a2;a3,3.8,10,0,,2,hybrid,repair,0,0,1
+co5,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: No agent on the team can carry crates; a2 only inspects and walks, while a5 can carry but also needs to inspect, and there is no agent that can do all three parts in sequence.",claude-haiku-4-5-20251001,3,,,,,,12,hybrid,repair,9,8,9
+co6,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: Part 'fly' requires flying over walls, but a4 starts at (2, 0) and cannot reach (0, 0) in time for the first task part at (0, 1), and a5 cannot fly at all.",claude-haiku-4-5-20251001,3,,,,,,4,hybrid,repair,0,0,0
+co7,llm,llm,grid,repair,-,1,llm,0,selection,does not cover ['move'],claude-haiku-4-5-20251001,1,,,,,,1,hybrid,repair,0,0,0
+co8,llm,llm,grid,repair,a1,0,llm,1,,,claude-haiku-4-5-20251001,1,a5;a6,3.6,19,0,,2,hybrid,repair,1,1,2
+co9,llm,llm,grid,repair,-,0,llm,0,arbitration,no conflict-free plan,claude-haiku-4-5-20251001,3,,,,,,4,hybrid,repair,0,0,1
+co10,llm,llm,grid,repair,-,1,llm,0,selection,does not cover ['inspect'],claude-haiku-4-5-20251001,1,,,,,,1,hybrid,repair,0,0,0
+co11,llm,llm,grid,repair,-,1,llm,0,selection,does not cover ['fly'],claude-haiku-4-5-20251001,1,,,,,,1,hybrid,repair,0,0,0
+co12,llm,llm,grid,repair,a1,0,llm,0,decomposition,"llm declared the team cannot do the task: Agent a3 can carry crates but cannot inspect rooms, and agent a5 can inspect rooms and move but cannot carry crates, so the carry part at (4,0) cannot be assigned to any team member.",claude-haiku-4-5-20251001,3,,,,,,4,hybrid,repair,0,0,0
+co13,llm,llm,grid,repair,-,0,llm,1,,,claude-haiku-4-5-20251001,3,a1;a6,4.1,25,2,,5,hybrid,repair,1,1,4
+co14,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: Agent a6 can fly to (0,2) for 'fly' and a4 can inspect at (2,2), but no agent can carry crates at (4,0) since a6 only flies and a4 cannot reach (4,0) while also inspecting (2,2) in the correct order.",claude-haiku-4-5-20251001,1,,,,,,2,hybrid,repair,0,0,0
+co15,llm,llm,grid,repair,-,0,llm,1,,,claude-haiku-4-5-20251001,1,a3;a5,4.5,10,0,,2,hybrid,repair,0,0,1
+co16,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: Agent a1 can do inspect and move, but agent a5 (the only one who can carry) cannot reach cell (3,1) where the carry task must be done while also being able to do the other tasks in order.",claude-haiku-4-5-20251001,1,,,,,,2,hybrid,repair,0,0,0
+co17,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: No agent can walk to cell (3, 0) because a6 starts at (4, 1) and cannot reach (3, 0) in the required task order after a2 completes carry and fly, and a2 cannot walk (only flies and carries).",claude-haiku-4-5-20251001,2,,,,,,33,hybrid,repair,9,8,9
+co18,llm,llm,grid,repair,-,0,llm,1,,,claude-haiku-4-5-20251001,1,a1;a2,5.0,17,1,,2,hybrid,repair,1,1,2
+co19,llm,llm,grid,repair,-,0,llm,0,decomposition,"llm declared the team cannot do the task: Agent a6 can carry crates and move to (4,4) and (0,4), but cannot fly over walls; agent a5 can fly over walls to (1,2) but cannot carry crates, leaving the carry part at (4,4) unassigned.",claude-haiku-4-5-20251001,2,,,,,,3,hybrid,repair,0,0,0
+co20,llm,llm,grid,repair,-,0,llm,1,,,claude-haiku-4-5-20251001,1,a1;a2,5.5,13,0,,2,hybrid,repair,1,1,2
