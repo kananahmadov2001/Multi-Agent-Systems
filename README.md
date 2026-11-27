@@ -423,11 +423,16 @@ every prompt and reply. Do not mix models in one table.
 - **LLM guidance adds nothing over the no-LLM control, under either constraint rule — and not
   because the model agreed with it.** Under the vertex rule, across the 783 node choices in the
   committed grid transcripts at a 50-call cap, Haiku picked something other than the cheapest
-  open node **172 times, 22% of its expansions**, with a per-instance rate as high as 46% on
-  hard6 — and solved the same 51 of 60 instances as a control that always takes the cheapest,
-  with not one outcome different. `checks/check_guidance.py` reports both halves, since a
-  matching solve count would prove nothing if the model had simply been answering "the
-  cheapest" all along. Under standard edge constraints, live on the grid hard set
+  open node **172 times, 22% of its expansions** — and solved the same 51 of 60 instances as a
+  control that always takes the cheapest, with not one outcome different and, checked against a
+  steps-recording control run, not one plan a different length either. `checks/check_guidance.py`
+  reports both halves, since a matching solve count would prove nothing if the model had simply
+  been answering "the cheapest" all along. It also splits the deviations by outcome, because
+  that is the first thing to doubt: 120 of the 172 fall on the nine instances nobody solved,
+  which burn their whole call budget and so offer the most room to wander and the least chance
+  of it mattering. The restriction holds anyway — on the 51 it solved there are still **52
+  deviations spread over 15 instances**, and all 51 match the control exactly. Under standard
+  edge constraints, live on the grid hard set
   (`results/haiku/hard_edge_haiku.csv`), it solves the same 21 of 25 as the control with
   identical plan lengths and 450 nodes against 453; its choices differ on 7 instances and
   change no outcome.

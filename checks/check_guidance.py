@@ -129,6 +129,22 @@ def main():
     print(f"  instances with a different outcome   {len(differ)}"
           + (f"  {differ}" if differ else ""))
 
+    # The deviations are not spread evenly, and the uneven part matters: an
+    # instance that nobody solved burns its whole call budget, so it offers the
+    # most chances to deviate and the least opportunity for a deviation to show
+    # up in the result. Reporting the overall rate alone invites the objection
+    # that the model only wandered where the search was doomed anyway.
+    won = [p for p in picks if live.get((p[0], p[1])) is True]
+    lost = [p for p in picks if live.get((p[0], p[1])) is False]
+    print("\nsplit by how the instance came out:")
+    for label, sub in (("on instances it solved", won), ("on instances it failed", lost)):
+        o = [p for p in sub if p[2] != 1]
+        print(f"  {label:26s} {len(sub):4d} choices, {len(o):4d} not the cheapest"
+              + (f"  ({100 * len(o) / len(sub):.0f}%)" if sub else ""))
+    hit = {(p[0], p[1]) for p in won if p[2] != 1}
+    print(f"  solved instances carrying at least one deviation: {len(hit)} of "
+          f"{sum(live[k] for k in shared)}")
+
     if a.detail:
         print("\nper instance: choices, and how many were not the cheapest")
         seen = {}
@@ -141,9 +157,16 @@ def main():
             print(f"  {k:28s} {n:3d} choices, {d:3d} not the cheapest ({100*d/n:3.0f}%)")
 
     if not differ and off:
+        won_off = [p for p in picks if live.get((p[0], p[1])) is True and p[2] != 1]
         print(f"\nThe model answered differently from the control on {len(off)} of "
-              f"{len(picks)} expansions\nand changed none of the "
-              f"{len(shared)} outcomes.")
+              f"{len(picks)} expansions\nand changed none of the {len(shared)} outcomes. "
+              f"Restricting to instances it solved,\nwhere a deviation had somewhere to show "
+              f"itself: {len(won_off)} deviations, still nothing changed.")
+        print("\nPlan length is not in control.txt, so this does not compare it. For that:")
+        print("  for s in hard random sweep; do \\")
+        print("    python3 -m experiments.bench --set $s --out /tmp/ctl_$s.csv; done")
+        print("  then diff the '3 ... cheapest node' rows against results/haiku/${s}_haiku.csv")
+        print("  (done once: all 60 agree on plan length too).")
 
 
 if __name__ == "__main__":
