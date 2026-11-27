@@ -44,7 +44,7 @@ export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per ru
 |---|---|
 | `python3 -m mas.verify` | The independent plan checker: 1 good plan accepted, 7 bad ones rejected (collision, swap, pocket swap, wrong start, wrong goal, illegal jump) |
 | `python3 -m mas.arbitration.cbs_baseline` | Approach 1: CBS, best-first and the depth-first ablation |
-| `python3 -m tests.test_fd` | Approach 1 with Fast Downward as the low-level planner |
+| `python3 -m tests.test_fd [FD_DIR]` | Approach 1 with Fast Downward as the low-level planner. **Needs Fast Downward** (default `../fast-downward-24.06.1`) |
 | `python3 -m tests.test_llm` | Approach 2 with fake LLMs |
 | `python3 -m tests.test_hybrid` | Approach 3 with fake LLMs |
 | `python3 -m mas.instances.instances` | The hard test cases and their backtrack counts |
@@ -57,11 +57,12 @@ export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per ru
 | `python3 -m checks.check_fd_route` | The generated PDDL against `plan_route`, **without needing Fast Downward**. Add `--adversarial` or `--pipeline` |
 | `python3 -m experiments.control` | Approach 3's search with no LLM, on all 60 benchmark instances |
 | `python3 -m mas.arbitration.ordering` | Cross-agent task order: detection, bounded repair, the release constraint, and `verify_order`, which checks order without sharing code with the detector that drives the repair |
-| `python3 -m mas.planning.fd_planner` | The generated PDDL against `plan_route`, including the release constraint. No Fast Downward needed |
+| `python3 -m mas.planning.fd_planner` | The PDDL encoding of vertex and edge bans, for single goals and routes, checked on the generated text. No Fast Downward needed |
 | `python3 -m mas.selection.llm_select` | The selection prompt and the team a reply is parsed into |
+| `python3 -m checks.check_authored` | Rebuilds the authored-PDDL cases from their seed and counts how many replies are exactly the compiled problem. Free, no Fast Downward |
 | `python3 -m checks.check_refusals` | Re-reads the live composite transcript and checks every refused decomposition against the team's own advertisements |
 | `python3 -m checks.check_edge` | Standard edge constraints against our stronger vertex rule |
-| `python3 -m checks.check_edge_oracle` | Both conflict rules against brute force, so "stronger" can be priced |
+| `python3 -m checks.check_edge_oracle` | Both conflict rules against brute force, so "stronger" can be priced. With 3 agents pass `--cap 20000`: at the default 2,000-node cap one case runs out of budget and is reported as a miss |
 | `python3 -m mas.instances.hard_cbs` | Regenerates the hard set by how many nodes best-first CBS itself spends |
 | `python3 -m experiments.bench` | All three approaches on the hard cases with fake LLMs (harness only) |
 
@@ -118,8 +119,10 @@ which is what filtered the original hard set. It is opt-in; `--set all` does not
 
 `--conflicts standard` swaps our vertex rule for proper edge constraints, which keeps the tree
 complete. It reaches all three approaches, so an edge run is a like-for-like comparison and not
-only a study of Approach 1. Live LLM runs under edge constraints were not affordable, so the
-committed edge results use the scripted policies.
+only a study of Approach 1. On the grid hard set there is a live Haiku run as well,
+`results/haiku/hard_edge_haiku.csv`: Approach 3 solves the same 21 of 25 as the no-LLM control,
+with the same plan lengths, and Approach 2 solves 14 of 25. The Fast Downward edge results
+(`results/fd/*edge*`) use the scripted policies only.
 
 `--fakes` adds the scripted policies to Approaches 2 and 3 at no cost. Use it as a regression
 test, not as a result: the policies are deterministic, so any difference between two runs is the
@@ -204,24 +207,42 @@ configuration scores with a perfect stage 3; without it the live number cannot b
 
 Authored problems are cached on (grid, start, route, horizon), as `make_fd_planner` caches its
 own, because an agent that reappears in a later team would otherwise be paid for twice. In the
-composite run below that suppressed 52 of 67 calls.
+authored all-stages run below (`pipeline_composite_authored_4x4.csv`) that suppressed 52 of 67
+calls.
 
 ### Do the stages compose?
 
 Every stage above was measured on its own, one substitution at a time, which is what makes the
 comparisons readable. That is not the same as having run the pipeline.
 
-Without `--live`, every stage that would call a model uses the scripted `Oracle` in
-`pipeline_bench.py` instead, so the whole thing can be run at once for nothing:
+Without `--live`, every stage that would call a model uses a scripted stand-in instead (the
+`Oracle` in `pipeline_bench.py` for selection and decomposition, a cheapest-option fake for
+the arbiter), so the whole thing can be run at once for nothing. This is what produced
+`results/pipeline/pipeline_composite.csv` (13/20), on the grid planner:
+
+```bash
+python3 -m experiments.pipeline_bench --selector llm --decomposer llm --arbiter hybrid \
+  --ordering repair --out /tmp/composite.csv
+```
+
+This is an integration test, not an experiment: the stand-ins are not a model and say nothing
+about judgement.
+
+A smaller variant also has the agents author their own PDDL, on Fast Downward at 4x4 and
+horizon 12, where a problem still fits in one reply. It is
+`results/pipeline/pipeline_composite_authored_4x4.csv` (3/6):
 
 ```bash
 python3 -m experiments.pipeline_bench --selector llm --decomposer llm --arbiter hybrid \
   --ordering repair --authored --fd "$FD" --n 6 --strategies cheapest \
-  --size 4 --horizon 12 --walls 0.15 --out /tmp/composite.csv
+  --size 4 --horizon 12 --walls 0.15 --out /tmp/composite_authored.csv
 ```
 
-This is an integration test, not an experiment: the stand-ins are not a model and say nothing
-about judgement. The same configuration with Haiku at all three stages is
+The same run without `--authored` is identical row for row, so with a perfect author the
+authored planner is indistinguishable from the compiled one. Three of this project's bugs
+lived in the seam between two features, which is why these runs exist.
+
+The 20-instance configuration with Haiku at all three stages is
 `results/pipeline/pipeline_composite_live.csv`, with every prompt and reply in the matching
 `.jsonl`:
 
@@ -249,7 +270,7 @@ so a rough split): 10 invented a constraint the prompt does not impose, mostly t
 unassignable; 2 read the vocabulary literally, declining because "walk is not explicitly
 listed as a capability"; 1 denied a capability the prompt advertised in the same breath
 (co2: "neither description includes flying capability" about an agent advertised as "flies
-over walls and inspects rooms").
+over walls and inspects rooms"); and 1 matched none of the patterns.
 
 The first group is the largest and the most interesting one for the paper: stage 2 is asked
 only to assign parts to agents that advertise them, and whether anyone can get there in time
@@ -259,11 +280,6 @@ refused on the answer.
 Pass `--log` for any live run -- a refusal you cannot read is not evidence. Every row records
 the model it used in a `model` column, `scripted` when a stand-in answered rather than a
 model.
-
-What the run establishes is that the five stages compose, and that the authored planner is
-indistinguishable from the compiled one when the author is perfect: the same run with and
-without `--authored` is identical row for row. Three of this project's bugs lived in the seam
-between two features, which is why it exists.
 
 Create an output folder before writing to it (`mkdir -p results/new`). Ctrl+C is safe:
 finished instances are kept.
@@ -285,8 +301,8 @@ mas/                 the system
   pipeline.py        joins the stages, including the backtrack to selection
   verify.py          the independent checker, stage 5
 experiments/         bench, bench_fd, pipeline_bench, control, analyze -- these write results/
-checks/              check_edge, check_edge_oracle, check_fd_route, check_refusals,
-                     check_search, fuzz_ordering, probe_e2e
+checks/              check_authored, check_edge, check_edge_oracle, check_fd_route,
+                     check_refusals, check_search, fuzz_ordering, probe_e2e
 tests/               test_fd, test_hybrid, test_llm
 domains/             the hand-written PDDL from the midterm
 scripts/             the standalone conflict detector built for it
@@ -328,7 +344,7 @@ measurement rather than a reproduction.
 | `results/pipeline/pipeline_composite*` | The all-stages configuration, 20 instances at one strategy. `_composite` uses the scripted stand-ins (13/20); `_composite_live` puts Haiku at selection, decomposition and arbitration (7/20), with every prompt and reply in `_composite_live.jsonl`. `_composite_authored_4x4` is the separate 6-instance variant that also authors its PDDL, at 4x4 and horizon 12 where a problem still fits in one reply (3/6); it predates the `--log` option, so it has no transcript and no model column. |
 | `results/ordering/` | `pipeline_order_check` and `pipeline_order_repair` (grid planner) and `pipeline_order_repair_fd` (Fast Downward). Read against `results/pipeline/pipeline_results.csv` (44/60), the same configuration with ordering off. |
 | `results/authored/` | `single`, `single_summary`, `routes` are `.txt`: one problem at a time, standalone. `pipeline_authored_4x4*.csv` are the in-pipeline runs at 4x4 horizon 12 -- `_compiled` is the scripted-author ceiling, the other two are one shot and one repair round. |
-| `results/haiku/` | Earlier arbitration runs on our own grid planner, kept so the PDDL numbers can be compared against them. |
+| `results/haiku/` | Earlier arbitration runs on our own grid planner, kept so the PDDL numbers can be compared against them, and `hard_edge_haiku`: the live Haiku run of all three approaches on the hard set under standard edge constraints, to be read against `results/control/hard_edge_all.csv`. |
 | `results/haiku_cap150/` | Re-run of the cases Approach 3 lost at the 50-call cap, with a 150-call cap. |
 | `results/sonnet/` | `live_check`: Sonnet 5.5 spot check on 2 cases. |
 | `results/control/` | `control.txt`, the output of `control.py`, and `hard_edge_all.csv`: all three approaches on the hard set under standard edge constraints with the scripted policies, to be read against the vertex numbers in `results/haiku/`. |
@@ -344,8 +360,15 @@ every prompt and reply. Do not mix models in one table.
   default the problem file is generated by the harness from a fixed two-action domain and each
   agent solves its own. Both halves of the proposal's version were tested. One problem at a
   time (`authored_pddl.py`), the model stays inside the fixed vocabulary on 18–19 of 20
-  single-goal cases but writes an exactly correct problem on only 4–5 of 20, and 0 of 12
-  ordered-route cases. Inside the pipeline (`--authored`), at the benchmark size of 5x5 and
+  single-goal cases, and its problem yields the optimal plan on 12–14 of 20 across two runs
+  (`results/authored/single_summary.txt` is the 14/20 run, and "correct" there means the
+  optimal plan). Far fewer are the exact problem the vocabulary
+  determines: 4 of 20 on the committed run, which `checks/check_authored.py` establishes
+  offline by rebuilding the same cases from the seed and diffing each reply against the
+  compiled problem. Of the 16 that differ, 10 omit edges the grid has, 5 invent edges it
+  does not, and 1 has the right number of edges but the wrong ones -- and yet 14 of
+  20 still admit an optimal plan, because a problem only has to be right about the one
+  start and goal it was handed. On ordered routes it is 0 of 12. Inside the pipeline (`--authored`), at the benchmark size of 5x5 and
   horizon 20 the architecture does not run at all: a two-site route problem is about 51k output
   tokens and the attempt timed out mid-generation. At 4x4 and horizon 12, where a route problem
   is about 18k, the scripted-author ceiling is 5 of 6 and the model scores 0 of 6 one shot and
@@ -378,9 +401,13 @@ every prompt and reply. Do not mix models in one table.
   available.** By default a swap forbids each agent's destination cell rather than the edge, so
   the tree is incomplete and Approach 1's optimality is relative to our constraint scheme.
   `--conflicts standard` uses proper edge constraints; `check_edge_oracle.py` confirms those
-  optimal against brute force on 803 cases. The gap is small but real: the vertex rule is one
-  step off the optimum on 21 of 65 brute-forced cases, about 1.3% total slack across 57
-  benchmark instances, and pocket-3's true optimum is 7, not the 8 the midterm reported. Edge
+  optimal against brute force on every solvable case: 369 at the defaults (2 agents, 3x3),
+  384 with `--size 4`, 259 with `--agents 3 --cases 300 --cap 20000` and 279 adding
+  `--size 4` to that, where the vertex rule is worse on 10, 6, 16 and 16. `check_edge.py` then prices the same gap on the benchmark instead of on random
+  small cases: across its 65 instances (5 gadgets, 20 old hard, 20 CBS-regenerated
+  hard, 20 random) the vertex rule costs one step more on 21 of them, 21 extra steps
+  against standard's 896 over the 60 both rules solve -- about 2.3% slack. Among the 21
+  is pocket-3, whose true optimum is 7, not the 8 the midterm reported. Edge
   constraints solve 57 of 60 where the vertex rule solves 58, because a complete tree is a
   bigger tree.
 - **Approach 3 stops at the first conflict-free plan it generates**, so its plans are not
@@ -388,8 +415,18 @@ every prompt and reply. Do not mix models in one table.
 - **The midterm's solve-count gap between Approaches 2 and 3 was budget, not judgement.** It
   compared Approach 2 at 20 calls with Approach 3 at 50. At matched caps the gap is one instance
   either way: 48 vs 49 at 20 calls, 51 vs 52 at 50, inside Approach 2's own run-to-run variance.
-  Plan quality still separates them — on the hard set at 50 calls, 20.5 steps against 14.2 — so
+  Plan quality still separates them — on the hard set at 50 calls, 20.5 steps against 14.2
+  averaged over what each solved, and 16.6 against 13.9 on the 17 instances both solved — so
   the claim that survives is about cost per conflict, not about solving more.
+- **LLM guidance adds nothing over the no-LLM control, under either constraint rule.** Under the
+  vertex rule Haiku's node choices never changed which instances Approach 3 solved. Under standard
+  edge constraints, live on the grid hard set (`results/haiku/hard_edge_haiku.csv`), it solves
+  the same 21 of 25 as the control with identical plan lengths and 450 nodes against 453; its
+  choices differ on 7 instances and change no outcome.
+- **With the LLM at every stage, decomposition is what breaks.** Live, the all-stages pipeline
+  solves 7 of 20 against 13 with scripted stand-ins, and all 8 extra losses are at
+  decomposition. All 19 refusals in the transcript were of teams whose own advertisements
+  covered the task (`checks/check_refusals.py`).
 - **Which LLM approach wins depends on the instance set.** On the `hcb` set, regenerated against
   best-first CBS itself, the ordering reverses: Approach 2 solves 17 of 20 and Approach 3 solves
   15, because Approach 3 pays one call per node expansion while Approach 2 pays one per conflict,
@@ -646,11 +683,13 @@ with the absolute path, e.g. `c:\CSE5106\Multi-Agent-Systems`.
 - Do commit our own `.pddl` files (like the ones above) to this repo,
   under `/domains/` — those are our work, not part of the Fast Downward
   install.
-- Scripts in this repo assume Fast Downward lives at `../fast-downward-24.06.1/`
-  relative to the repo root. If your setup differs, adjust paths locally
-  rather than committing a path change. On Windows, invoke the planner
-  through the `aibasel/downward` container with the PDDL folder mounted
-  at `/shared`, as shown in the Windows section above.
+- Every script that runs Fast Downward takes its location as `--fd DIR`
+  (set `$FD` once and pass `--fd "$FD"`); only `tests.test_fd` falls back
+  to `../fast-downward-24.06.1/`, relative to where you run it, and takes
+  the directory as its first argument instead. Pass the path rather than
+  committing a path change. On Windows, `experiments.bench_fd` can drive
+  the `aibasel/downward` container itself (`--fd-mode run|exec`); for the
+  hand-written PDDL, mount the folder at `/shared` as shown above.
 
 Bulk runs use Claude Haiku 4.5 (`ARBITER_MODEL=claude-haiku-4-5-20251001`), which is about
 nine times cheaper per call in measured spend. Sonnet 5.5 was used for a two-instance spot
