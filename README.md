@@ -42,7 +42,7 @@ export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per ru
 
 | Command | What it checks |
 |---|---|
-| `python3 -m mas.verify` | The independent plan checker (1 good plan, 7 bad plans rejected), and `verify_order`, which checks task order without sharing code with the detector that drives the repair |
+| `python3 -m mas.verify` | The independent plan checker: 1 good plan accepted, 7 bad ones rejected (collision, swap, pocket swap, wrong start, wrong goal, illegal jump) |
 | `python3 -m mas.arbitration.cbs_baseline` | Approach 1: CBS, best-first and the depth-first ablation |
 | `python3 -m tests.test_fd` | Approach 1 with Fast Downward as the low-level planner |
 | `python3 -m tests.test_llm` | Approach 2 with fake LLMs |
@@ -56,7 +56,10 @@ export ARBITER_MAX_CALLS=4000                    # hard stop on API calls per ru
 | `python3 -m mas.instances.colored_box` | The colored-box domain, where each agent sees a different grid |
 | `python3 -m checks.check_fd_route` | The generated PDDL against `plan_route`, **without needing Fast Downward**. Add `--adversarial` or `--pipeline` |
 | `python3 -m experiments.control` | Approach 3's search with no LLM, on all 60 benchmark instances |
-| `python3 -m mas.arbitration.ordering` | Cross-agent task order: detection, bounded repair, and the release constraint |
+| `python3 -m mas.arbitration.ordering` | Cross-agent task order: detection, bounded repair, the release constraint, and `verify_order`, which checks order without sharing code with the detector that drives the repair |
+| `python3 -m mas.planning.fd_planner` | The generated PDDL against `plan_route`, including the release constraint. No Fast Downward needed |
+| `python3 -m mas.selection.llm_select` | The selection prompt and the team a reply is parsed into |
+| `python3 -m checks.check_refusals` | Re-reads the live composite transcript and checks every refused decomposition against the team's own advertisements |
 | `python3 -m checks.check_edge` | Standard edge constraints against our stronger vertex rule |
 | `python3 -m checks.check_edge_oracle` | Both conflict rules against brute force, so "stronger" can be priced |
 | `python3 -m mas.instances.hard_cbs` | Regenerates the hard set by how many nodes best-first CBS itself spends |
@@ -101,8 +104,13 @@ all three as well.
 
 Options: `--set easy|hard|hcb|random|sweep|all`, `--conflicts vertex|standard`, `--start N`,
 `--limit N`, `--only NAME[,NAME]`, `--repeat R`, `--search CONFIG`, `--a2-calls N`,
-`--a3-calls N`, `--fakes`, `--fd-mode run|exec`.
-**Always pass `--out`** — the default overwrites a committed file.
+`--a3-calls N`, `--fakes`, `--dfs`, `--live`, `--log FILE`, `--fd DIR`,
+`--fd-mode run|exec`, `--fd-container NAME`, `--fd-workdir DIR`, `--out FILE`, `--force`.
+
+**Pass `--out`.** Without it the results go to `results/fd/fd_results.csv`, which is
+committed; a run that would replace a file already there stops and says so, and `--force`
+is how you mean it. That guard exists because a `--limit 3` smoke run once replaced the
+full 25-instance set in silence.
 
 `--set hcb` is the hard set regenerated against best-first CBS itself: an instance is kept when
 CBS spends at least 20 expansions on it, rather than when two depth-first rule orders disagree,
@@ -129,11 +137,12 @@ python3 -m experiments.pipeline_bench --fd "$FD" --k 3 --arbiter hybrid --live -
 python3 -m experiments.pipeline_bench --fd "$FD" --k 3 --arbiter llm --live --out results/new/llm.csv
 ```
 
-Options: `--domain capability|colored`, `--k N`, `--arbiter cbs|hybrid|llm`,
-`--selector tag|llm`, `--decomposer greedy|llm`, `--ordering off|check|repair`,
-`--ordering-repairs N`, `--authored`, `--authored-attempts N`, `--authored-lenient`,
-`--live`, `--calls N`, `--max-teams N`, `--agents N`, `--size N`, `--walls F`,
-`--horizon N`, `--search CONFIG`, `--fd DIR`, `--out FILE`.
+Options: `--domain capability|colored`, `--n N`, `--seed N`, `--strategies LIST`, `--k N`,
+`--arbiter cbs|hybrid|llm`, `--selector tag|llm`, `--decomposer greedy|llm`,
+`--ordering off|check|repair`, `--ordering-repairs N`, `--authored`,
+`--authored-attempts N`, `--authored-lenient`, `--live`, `--calls N`, `--max-teams N`,
+`--agents N`, `--tags N`, `--scarce`, `--size N`, `--walls F`, `--horizon N`,
+`--search CONFIG`, `--fd DIR`, `--log FILE`, `--out FILE`, `--force`, `--quiet`.
 
 `--ordering check` adds cross-agent task order to verification; `--ordering repair` also tries
 to fix violations by delaying the later part. Both are free and deterministic, and both work
@@ -154,8 +163,12 @@ model will emit reliably. 4x4 with horizon 12 is about 18k and is where the auth
 below were done.
 
 Without `--live`, an LLM arbiter runs on a scripted fake that always takes the first option —
-which is exactly the no-LLM control, at no cost. **Pass `--out` whenever you change `--k` or
-`--agents`**: the default filename does not encode them, so a sweep will overwrite itself.
+which is exactly the no-LLM control, at no cost.
+
+**Pass `--out` whenever you change `--k` or `--agents`.** Without `--out` the filename is
+built from the flags, and those two are not among them, so every run of a sweep claims the
+same name. The second run of that sweep now stops rather than replace the first (`--force`
+overrides), but a named file is still what you want.
 
 ### Agent-authored PDDL (`authored_pddl.py`)
 
@@ -196,7 +209,9 @@ composite run below that suppressed 52 of 67 calls.
 ### Do the stages compose?
 
 Every stage above was measured on its own, one substitution at a time, which is what makes the
-comparisons readable. It is not the same as having run the pipeline. Without `--live`, every stage that would call a model uses the scripted `Oracle` in
+comparisons readable. That is not the same as having run the pipeline.
+
+Without `--live`, every stage that would call a model uses the scripted `Oracle` in
 `pipeline_bench.py` instead, so the whole thing can be run at once for nothing:
 
 ```bash
@@ -216,14 +231,39 @@ python3 -m experiments.pipeline_bench --selector llm --decomposer llm --arbiter 
   --log results/pipeline/pipeline_composite_live.jsonl
 ```
 
-It solves 7 of 20 against the stand-ins' 13, and the whole gap is decomposition. All 18
-refusals were of teams that covered the task: in three the model denied a capability its own
-prompt advertised, and in three more it named the agent able to do a part and then called that
-part unassignable. Pass `--log` for any live run -- a refusal you cannot read is not evidence.
-Every row records the model it used in a `model` column, `oracle` when the stand-in answered. What it establishes is that the five stages run together and that the authored
-planner is indistinguishable from the compiled one when the author is perfect -- the same run
-with and without `--authored` is identical row for row. Three of this project's bugs lived in
-the seam between two features, which is why it exists.
+It solves 7 of 20 against the stand-ins' 13 — 8 instances lost at decomposition, 4 at
+selection, 1 at arbitration — and decomposition is the whole of the gap.
+
+Across the run the model refused 19 decompositions, and **all 19 were of teams that covered
+the task**, which `check_refusals.py` establishes without a model by running the same
+`advertise()` that stage 1 used to pick the team:
+
+```bash
+python3 -m checks.check_refusals            # 19 refusals, 19 of covering teams
+python3 -m checks.check_refusals --reasons  # every team, advert and stated reason
+```
+
+Sorting the stated reasons by the fault they show (keyword matching over one sentence each,
+so a rough split): 10 invented a constraint the prompt does not impose, mostly that an agent
+"cannot reach (3,3) in time"; 5 named the agent able to do a part and then called that part
+unassignable; 2 read the vocabulary literally, declining because "walk is not explicitly
+listed as a capability"; 1 denied a capability the prompt advertised in the same breath
+(co2: "neither description includes flying capability" about an agent advertised as "flies
+over walls and inspects rooms").
+
+The first group is the largest and the most interesting one for the paper: stage 2 is asked
+only to assign parts to agents that advertise them, and whether anyone can get there in time
+is what stages 3 and 4 are for. The model answered a harder question than it was given and
+refused on the answer.
+
+Pass `--log` for any live run -- a refusal you cannot read is not evidence. Every row records
+the model it used in a `model` column, `scripted` when a stand-in answered rather than a
+model.
+
+What the run establishes is that the five stages compose, and that the authored planner is
+indistinguishable from the compiled one when the author is perfect: the same run with and
+without `--authored` is identical row for row. Three of this project's bugs lived in the seam
+between two features, which is why it exists.
 
 Create an output folder before writing to it (`mkdir -p results/new`). Ctrl+C is safe:
 finished instances are kept.
@@ -245,8 +285,8 @@ mas/                 the system
   pipeline.py        joins the stages, including the backtrack to selection
   verify.py          the independent checker, stage 5
 experiments/         bench, bench_fd, pipeline_bench, control, analyze -- these write results/
-checks/              check_edge, check_edge_oracle, check_fd_route, check_search,
-                     fuzz_ordering, probe_e2e
+checks/              check_edge, check_edge_oracle, check_fd_route, check_refusals,
+                     check_search, fuzz_ordering, probe_e2e
 tests/               test_fd, test_hybrid, test_llm
 domains/             the hand-written PDDL from the midterm
 scripts/             the standalone conflict detector built for it
@@ -368,9 +408,11 @@ every prompt and reply. Do not mix models in one table.
 Fast Downward is an external dependency and is **not** part of this repo.
 Install it locally, as a sibling directory next to this repo (not inside it):
 
+```
 CSE 5106/
 ├── Multi-Agent-Systems/     <- this repo
 └── fast-downward-24.06.1/   <- installed here, next to the repo
+```
 
 ### 1. Install prerequisites (macOS)
 
@@ -430,6 +472,7 @@ planner itself was built — it's just the Python wrapper.
 
 **domain.pddl**
 
+```lisp
 (define (domain test)
   (:requirements :strips)
   (:predicates (at-a) (at-b))
@@ -437,13 +480,24 @@ planner itself was built — it's just the Python wrapper.
     :parameters ()
     :precondition (at-a)
     :effect (and (at-b) (not (at-a)))))
+```
 
 **problem.pddl**
 
+```lisp
 (define (problem test-problem)
   (:domain test)
   (:init (at-a))
   (:goal (at-b)))
+```
+
+Run it:
+
+```
+./fast-downward.py domain.pddl problem.pddl --search "astar(lmcut())"
+```
+
+Expected: `Solution found. Plan length: 1 step(s).`
 
 ### 6. Verify with a real test problem - Conflict
 
@@ -452,47 +506,55 @@ into your `fast-downward-24.06.1` folder, or reference them by path:
 
 **domain.pddl**
 
-    (define (domain conflict-test)
-      (:requirements :strips :typing)
-      (:types agent cell)
-      (:predicates
-        (at ?a - agent ?c - cell)
-        (free ?c - cell))
-      (:action move
-        :parameters (?a - agent ?from - cell ?to - cell)
-        :precondition (and (at ?a ?from) (free ?to))
-        :effect (and (at ?a ?to) (not (at ?a ?from))
-                     (free ?from) (not (free ?to)))))
+```lisp
+(define (domain conflict-test)
+  (:requirements :strips :typing)
+  (:types agent cell)
+  (:predicates
+    (at ?a - agent ?c - cell)
+    (free ?c - cell))
+  (:action move
+    :parameters (?a - agent ?from - cell ?to - cell)
+    :precondition (and (at ?a ?from) (free ?to))
+    :effect (and (at ?a ?to) (not (at ?a ?from))
+                 (free ?from) (not (free ?to)))))
+```
 
 **problem.pddl**
 
-    (define (problem two-agents)
-      (:domain conflict-test)
-      (:objects
-        a1 a2 - agent
-        start1 start2 shared - cell)
-      (:init
-        (at a1 start1)
-        (at a2 start2)
-        (free shared))
-      (:goal (and (at a1 shared) (at a2 shared))))
+```lisp
+(define (problem two-agents)
+  (:domain conflict-test)
+  (:objects
+    a1 a2 - agent
+    start1 start2 shared - cell)
+  (:init
+    (at a1 start1)
+    (at a2 start2)
+    (free shared))
+  (:goal (and (at a1 shared) (at a2 shared))))
+```
 
 This problem is deliberately unsolvable — both agents want the same
 exclusive cell, and only one can hold it. Run it:
 
-    ./fast-downward.py domain.pddl problem.pddl --search "astar(lmcut())"
+```
+./fast-downward.py domain.pddl problem.pddl --search "astar(lmcut())"
+```
 
 **Expected result: no plan found.** That failure is correct — it's
 your basic conflict, confirmed mechanically. If you instead get an
 error (not a "no solution" result, but a crash or a parse error),
 something's wrong with the install, not with the problem.
 
-If you want to confirm the planner also works on a solvable case, once you're a fixed version of the above so that agent 2 targets a different cell than `shared`.
+To see the planner solve the same conflict rather than report it, give agent 2 a
+different target cell. That is the next section.
 
-### 6. Verify with a real test problem - Solving the Conflict
+### 7. Verify with a real test problem - solving the conflict
 
 **fixed-problem.pddl**
 
+```lisp
 (define (problem two-agents-fixed)
   (:domain conflict-test)
   (:objects
@@ -504,10 +566,15 @@ If you want to confirm the planner also works on a solvable case, once you're a 
     (free shared)
     (free other))
   (:goal (and (at a1 shared) (at a2 other))))
+```
 
 Then run it:
 
-    ./fast-downward.py domain.pddl fixed-problem.pddl --search "astar(lmcut())"
+```
+./fast-downward.py domain.pddl fixed-problem.pddl --search "astar(lmcut())"
+```
+
+Expected: `Solution found. Plan length: 2 step(s).`
 
 ## Setup: Fast Downward (Windows, Docker)
 
