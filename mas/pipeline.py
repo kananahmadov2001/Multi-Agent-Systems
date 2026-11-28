@@ -183,9 +183,10 @@ def run_pipeline(grid, pool, task, k, sites, strategy="cheapest", horizon=HORIZO
             if ordering == "check":
                 stats.update(ordering_conflicts=len(conflicts), ordering_repairs=0,
                              ordering_rounds=1)
-                ok, independent = verify_order(mapf, paths, task, assignment)
-                if not ok:
-                    order_problems = independent + order_problems
+                if not order_problems and not conflicts:
+                    ok, independent = verify_order(mapf, paths, task, assignment)
+                    if not ok:
+                        order_problems = independent
             if order_problems or conflicts:
                 why = (order_problems[0] if order_problems else
                        "ordering repair returned an invalid plan" if ordering == "repair" else

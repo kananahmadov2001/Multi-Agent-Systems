@@ -3,7 +3,7 @@
 CSE 5106 Final Project: Centralized Conflict Resolution for Independently Planning Agents.
 
 A central agent takes plans it did not write and repairs the collisions between them. We
-compare three ways of doing that, all over the same Conflict-Based Search tree:
+compare a fixed Conflict-Based Search baseline with two LLM arbitration strategies:
 
 1. **CBS** — a fixed best-first search. No API calls.
 2. **LLM, no tree** — the model picks which agent to constrain, with no search structure.
@@ -13,9 +13,9 @@ A **no-LLM control** (approach 3 with the model replaced by "always take the che
 is what every claim about LLM guidance is measured against.
 
 Around that sits a four-stage pipeline: select `k` agents from their advertised capabilities,
-decompose the task into an ordered route per agent, plan each route independently in PDDL with
-Fast Downward, then detect and arbitrate the collisions and verify the joint plan. A failed
-split backtracks to selection and tries the next covering team.
+decompose the task into an ordered route per agent, plan each route independently on the grid
+or in PDDL with Fast Downward, then detect and arbitrate the collisions and verify the joint
+plan. A failed split backtracks to selection and tries the next covering team.
 
 ## Setup
 
