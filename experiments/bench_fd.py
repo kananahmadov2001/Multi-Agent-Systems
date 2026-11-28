@@ -12,19 +12,22 @@ By default this runs Approach 1 only (CBS best-first), which is deterministic an
 free: no API calls. Approaches 2/3 need LLM calls, so they are opt-in -- --live for
 the real model (needs API budget) or --fakes for the $0 fake policies.
 
-    python3 -m experiments.bench_fd --set hard --only pocket-3,hard3      # Approach 1 only, $0
-    python3 -m experiments.bench_fd --set hard --limit 5                  # first 5 instances
-    python3 -m experiments.bench_fd --set hard --limit 5 --dfs            # add the depth-first ablations
-    python3 -m experiments.bench_fd --set hard --limit 5 --live           # also 2/3 (needs API budget)
+    python3 -m experiments.bench_fd --fd "$FD" --set hard --only pocket-3,hard3 --out /tmp/a.csv   # Approach 1 only, $0
+    python3 -m experiments.bench_fd --fd "$FD" --set hard --limit 5 --out /tmp/b.csv             # first 5 instances
+    python3 -m experiments.bench_fd --fd "$FD" --set hard --limit 5 --dfs --out /tmp/c.csv       # add the depth-first ablations
+    python3 -m experiments.bench_fd --fd "$FD" --set hard --limit 5 --live --out /tmp/d.csv      # also 2/3 (needs API budget)
+    python3 -m experiments.bench_fd --fd-mode exec --set hard --limit 5 --out /tmp/e.csv         # Windows: Docker, no --fd
 
-Requires Fast Downward available. Locally that means Docker Desktop running with
-the `aibasel/downward` image tagged; pass --fd <dir> instead if you have a native
-build. The first argument of make_fd_planner is passed positionally for that reason.
-Each CBS expansion costs roughly one Fast Downward call (~1 s through Docker), so
+Requires Fast Downward. With a native build pass --fd DIR, the directory holding
+fast-downward.py (the default --fd-mode run needs it). Without one, --fd-mode exec
+drives the `aibasel/downward` Docker image instead and ignores --fd.
+Each CBS expansion costs roughly one Fast Downward call (about 1 s through Docker), so
 this is far slower than the grid run: start with --only or --limit. A run counts
 as solved only if verify.py accepts it, the same rule as bench.py.
---fd-mode exec reuses one long-lived container instead of starting one per call,
-which removes about 0.5 s of container startup from each call.
+--fd-mode run invokes <--fd>/fast-downward.py once per call, so with a native build
+it is a local process; --fd is required for it. --fd-mode exec ignores --fd and
+reuses one long-lived aibasel/downward container instead, the Windows path: measured
+against a container started per call that saves about 0.5 s of the ~1.2 s call.
 Without --out the results go to results/fd/fd_results.csv. A run that would replace
 a file already there stops instead: pass --out to write somewhere else, or --force
 to replace it on purpose.
@@ -65,9 +68,10 @@ def ensure_fd_container(name, mount_source):
 def make_fd_planner_exec(container, host_dir, container_dir, search):
     """Fast Downward through a container that is started once and reused.
 
-    fd_planner.make_fd_planner starts a container for every call; measured against
-    `docker exec` that costs about 0.5 s of the ~1.2 s call, so this is the same
-    encoding and the same results for less time. The plan file is deleted before
+    fd_planner.make_fd_planner runs <fd_dir>/fast-downward.py once per call, so it is
+    a local process with a native build and a container per call when that path is a
+    Docker wrapper. Measured against the second, `docker exec` saves about 0.5 s of the
+    ~1.2 s call, so this is the same encoding and the same results for less time. The plan file is deleted before
     each call: a container that is not recreated would otherwise leave the previous
     answer on disk and a run that finds no plan would read it back.
     """
@@ -141,16 +145,18 @@ def main():
                          "Approach 1 alone is free, so this gives a true-optimal reference at no cost")
     ap.add_argument("--a2-calls", type=int, default=20)
     ap.add_argument("--a3-calls", type=int, default=50)
-    ap.add_argument("--fd", default="aibasel/downward",
-                    help="first argument of fd_planner.make_fd_planner. Either a Fast Downward "
-                         "Docker image tag (the local Docker build) or a directory containing "
-                         "fast-downward.py (a native build). Passed positionally so this script "
+    ap.add_argument("--fd", default=None,
+                    help="directory containing fast-downward.py, passed to "
+                         "fd_planner.make_fd_planner. Required unless --fd-mode exec, which "
+                         "uses the aibasel/downward image instead and ignores this. "
+                         "Passed positionally so this script "
                          "works with either version of fd_planner.py.")
     ap.add_argument("--search", default="astar(lmcut())", help="Fast Downward search configuration")
     ap.add_argument("--fd-mode", choices=["run", "exec"], default="run",
-                    help="run: what fd_planner.make_fd_planner does, one container per call. "
-                         "exec: reuse one long-lived container; about 2x faster per call "
-                         "because container startup is not paid every time")
+                    help="run: invoke <--fd>/fast-downward.py once per call, what "
+                         "fd_planner.make_fd_planner does; a local process with a native "
+                         "build. exec: ignore --fd and drive one reused aibasel/downward "
+                         "container with docker exec, which is how Windows runs it")
     ap.add_argument("--fd-container", default="fdbox", help="--fd-mode exec: container to reuse or create")
     ap.add_argument("--fd-workdir", default="fd_work", help="--fd-mode exec: scratch dir in this repo")
     a = ap.parse_args()
@@ -184,6 +190,11 @@ def main():
     # across two instances with the same start/goal pair would reuse paths computed
     # on the wrong grid. Intra-instance caching is kept: it is what makes a full CBS
     # expansion usually cost about one Fast Downward call rather than one per replan.
+    if a.fd_mode == "run" and not a.fd:
+        raise SystemExit(
+            "--fd-mode run needs --fd DIR, the directory holding fast-downward.py,\n"
+            "  e.g. --fd \"$HOME/Desktop/CSE 5106/fast-downward-24.06.1\"\n"
+            "Use --fd-mode exec to drive the aibasel/downward container instead.")
     if a.fd_mode == "exec":
         work = os.path.join(ROOT, a.fd_workdir)
         os.makedirs(work, exist_ok=True)

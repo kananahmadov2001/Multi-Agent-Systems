@@ -117,20 +117,23 @@ def main():
         if made:
             cases.append(made)
 
-    tally = {"std optimal": 0, "std SUBOPTIMAL": 0, "std MISSED": 0,
-             "vertex optimal": 0, "vertex worse": 0, "vertex missed": 0,
+    tally = {"std optimal": 0, "std SUBOPTIMAL": 0, "std MISSED": 0, "std capped": 0,
+             "vertex optimal": 0, "vertex worse": 0, "vertex missed": 0, "vertex capped": 0,
              "no solution": 0}
     bad = []
     for grid, agents in cases:
         opt = brute_force(grid, agents, a.horizon)
-        std, _ = cbs(grid, agents, "standard", a.horizon, a.cap)
-        vtx, _ = cbs(grid, agents, "vertex", a.horizon, a.cap)
+        std, std_stats = cbs(grid, agents, "standard", a.horizon, a.cap)
+        vtx, vtx_stats = cbs(grid, agents, "vertex", a.horizon, a.cap)
         if opt is None:
             tally["no solution"] += 1
             if std is not None or vtx is not None:
                 bad.append(("CBS solved an unsolvable instance", grid, agents, opt, std, vtx))
             continue
-        if std is None:
+        if std is None and std_stats.get("hit_limit"):
+            # Out of node budget, not out of tree. Nothing is shown either way.
+            tally["std capped"] += 1
+        elif std is None:
             tally["std MISSED"] += 1
             bad.append(("standard missed a solution", grid, agents, opt, std, vtx))
         elif std > opt:
@@ -141,7 +144,9 @@ def main():
                         grid, agents, opt, std, vtx))
         else:
             tally["std optimal"] += 1
-        if vtx is None:
+        if vtx is None and vtx_stats.get("hit_limit"):
+            tally["vertex capped"] += 1
+        elif vtx is None:
             tally["vertex missed"] += 1
         elif vtx > opt:
             tally["vertex worse"] += 1
@@ -162,8 +167,12 @@ def main():
     if bad:
         print("FAIL: standard mode is not behaving as complete and optimal CBS.")
         return 1
+    judged = solvable - tally["std capped"]
     print(f"PASS: standard mode matched the brute-force optimum on all "
-          f"{solvable} solvable cases.")
+          f"{judged} solvable cases it finished.")
+    if tally["std capped"]:
+        print(f"      {tally['std capped']} more ran out of the {a.cap}-node budget and "
+              f"prove nothing; raise --cap to judge them.")
     print(f"      The stronger vertex rule was worse on {tally['vertex worse']} "
           f"and missed {tally['vertex missed']} of them.")
     return 0

@@ -61,7 +61,7 @@ export ARBITER_MAX_CALLS=4000
 | `python3 -m checks.check_guidance` | Approach 3's node choices against the no-LLM control: how often the model disagreed, and whether any outcome changed. Free, no Fast Downward |
 | `python3 -m checks.check_refusals` | Re-reads the live composite transcript and checks every refused decomposition against the team's own advertisements |
 | `python3 -m checks.check_edge` | Standard edge constraints against our stronger vertex rule |
-| `python3 -m checks.check_edge_oracle` | Both conflict rules against brute force, so "stronger" can be priced. With 3 agents pass `--cap 20000`: at the default 2,000-node cap one case runs out of budget and is reported as a miss |
+| `python3 -m checks.check_edge_oracle` | Both conflict rules against brute force, so "stronger" can be priced. A case that runs out of the node budget (`--cap`, default 2,000) is counted as capped, not as a miss; with 3 agents one case does, and `--cap 20000` judges it too |
 | `python3 -m mas.instances.hard_cbs` | Regenerates the hard set by how many nodes best-first CBS itself spends |
 | `python3 -m experiments.bench` | All three approaches on the hard cases with fake LLMs (harness only) |
 
